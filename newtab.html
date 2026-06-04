@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <title>Tessra</title>
   <link rel="stylesheet" href="newtab.css" />
-  <link rel="icon" type="image/png" href="/icons/icon-96.png"/>
 </head>
 <body>
   <div id="board"><!-- widgets rendered here --></div>
@@ -18,7 +17,16 @@
 
   <aside id="side-panel" aria-hidden="true">
     <div class="panel-header">
-      <span class="panel-brand">Tessra</span>
+      <span class="panel-brand">
+        <svg class="panel-logo" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <rect x="3" y="3"  width="8" height="8"  rx="1.5" fill="currentColor"/>
+          <rect x="13" y="3"  width="8" height="4"  rx="1.5" fill="currentColor"/>
+          <rect x="13" y="9"  width="8" height="8"  rx="1.5" fill="currentColor"/>
+          <rect x="3" y="13" width="8" height="8"  rx="1.5" fill="currentColor"/>
+          <rect x="13" y="19" width="8" height="2"  rx="1"   fill="currentColor" opacity="0.5"/>
+        </svg>
+        Tessra
+      </span>
       <button id="panel-close" title="Close">×</button>
     </div>
     <div class="panel-tabs" role="tablist">
@@ -28,22 +36,8 @@
 
     <div class="panel-pane" data-pane="widgets">
       <p class="panel-hint">Drag a widget onto the page.</p>
-      <div class="widget-catalog">
-        <div class="widget-card" draggable="false" data-type="clock">
-          <div class="card-icon">◷</div><div class="card-label">Clock</div>
-        </div>
-        <div class="widget-card" data-type="search">
-          <div class="card-icon">⌕</div><div class="card-label">Search</div>
-        </div>
-        <div class="widget-card" data-type="shortcuts">
-          <div class="card-icon">▦</div><div class="card-label">Shortcuts</div>
-        </div>
-        <div class="widget-card" data-type="todo">
-          <div class="card-icon">☑</div><div class="card-label">To-do</div>
-        </div>
-        <div class="widget-card" data-type="notes">
-          <div class="card-icon">✎</div><div class="card-label">Notes</div>
-        </div>
+      <div class="widget-catalog" id="widget-catalog">
+        <!-- Cards generated from the widget registry -->
       </div>
     </div>
 
@@ -55,15 +49,38 @@
           <button data-value="color">Color</button>
           <button data-value="image">Image</button>
         </div>
-        <label class="row" data-show="bgType:color,dots">
+        <div class="row" data-show="bgType:color,dots">
           <span>Color</span>
-          <input type="color" id="bgColor" />
-        </label>
-        <label class="row" data-show="bgType:image">
-          <span>Image</span>
-          <input type="file" id="bgImage" accept="image/*" />
-        </label>
-        <button class="btn-subtle" id="bgImageClear" data-show="bgType:image">Clear image</button>
+          <div class="color-control" data-key="bgColor"></div>
+          <button class="reset-btn" data-reset="bgColor" title="Reset to default" aria-label="Reset"></button>
+        </div>
+        <div class="upload-row" data-show="bgType:image">
+          <button type="button" class="upload-btn" id="bgImageBtn">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <span>Choose image</span>
+          </button>
+          <button type="button" class="upload-btn" id="bgImageClear" disabled>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+              <path d="M10 11v6M14 11v6"/>
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+            </svg>
+            <span>Clear</span>
+          </button>
+          <input type="file" id="bgImage" accept="image/*" hidden />
+        </div>
+        <div class="image-preview hidden" id="bgImagePreview" data-show="bgType:image">
+          <img class="image-preview-thumb" id="bgImageThumb" alt=""/>
+          <div class="image-preview-info">
+            <div class="image-preview-name" id="bgImageName"></div>
+            <div class="image-preview-res" id="bgImageRes"></div>
+          </div>
+        </div>
       </section>
 
       <section class="control-group">
@@ -72,33 +89,62 @@
           <span>Window-style headers</span>
           <input type="checkbox" id="showHeaders" class="toggle"/>
         </label>
-        <label class="row"><span>Fill</span><input type="color" id="widgetBg"/></label>
-        <label class="row"><span>Border</span><input type="color" id="widgetBorder"/></label>
+        <div class="row">
+          <span>Fill</span>
+          <div class="color-control" data-key="widgetBg"></div>
+          <button class="reset-btn" data-reset="widgetBg" title="Reset to default" aria-label="Reset"></button>
+        </div>
+        <div class="row">
+          <span>Border</span>
+          <div class="color-control" data-key="widgetBorder"></div>
+          <button class="reset-btn" data-reset="widgetBorder" title="Reset to default" aria-label="Reset"></button>
+        </div>
         <div class="slider-row">
           <span>Border width</span>
           <input type="range" min="0" max="4" step="1" id="widgetBorderWidth"/>
           <input type="number" min="0" max="4" step="1" id="widgetBorderWidthN" class="num"/>
           <span class="unit">px</span>
+          <button class="reset-btn" data-reset="widgetBorderWidth" title="Reset to default" aria-label="Reset"></button>
         </div>
         <div class="slider-row">
           <span>Corner radius</span>
           <input type="range" min="0" max="24" step="1" id="widgetRadius"/>
           <input type="number" min="0" max="24" step="1" id="widgetRadiusN" class="num"/>
           <span class="unit">px</span>
+          <button class="reset-btn" data-reset="widgetRadius" title="Reset to default" aria-label="Reset"></button>
         </div>
         <div class="slider-row">
           <span>Shadow</span>
           <input type="range" min="0" max="100" step="1" id="widgetShadow"/>
           <input type="number" min="0" max="100" step="1" id="widgetShadowN" class="num"/>
           <span class="unit">%</span>
+          <button class="reset-btn" data-reset="widgetShadow" title="Reset to default" aria-label="Reset"></button>
         </div>
       </section>
 
       <section class="control-group">
-        <button class="btn-subtle danger" id="themeReset">Reset to defaults</button>
+        <button class="btn-subtle danger" id="themeReset">Reset everything to defaults</button>
       </section>
     </div>
   </aside>
+
+  <!-- Custom color picker popover -->
+  <div id="color-popover" class="hidden" role="dialog" aria-label="Color picker">
+    <div class="cp-preview"></div>
+    <label class="cp-slider-label">Hue
+      <input type="range" min="0" max="360" step="1" class="cp-hue cp-slider"/>
+    </label>
+    <label class="cp-slider-label">Saturation
+      <input type="range" min="0" max="100" step="1" class="cp-sat cp-slider"/>
+    </label>
+    <label class="cp-slider-label">Lightness
+      <input type="range" min="0" max="100" step="1" class="cp-lig cp-slider"/>
+    </label>
+    <div class="cp-hex-row">
+      <span class="cp-hex-prefix">#</span>
+      <input type="text" class="cp-hex" maxlength="6" spellcheck="false"/>
+    </div>
+  </div>
 
   <!-- Drag preview ghost while dragging from panel -->
   <div id="drag-ghost" class="hidden"></div>
@@ -114,6 +160,6 @@
     </div>
   </template>
 
-  <script src="newtab.js"></script>
+  <script type="module" src="src/main.js"></script>
 </body>
 </html>
