@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tessra</title>
+  <link rel="stylesheet" href="newtab.css" />
+</head>
+<body>
+  <div id="board"><!-- widgets rendered here --></div>
+
+  <button id="edit-toggle" title="Toggle edit mode (E)">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+    </svg>
+    <span class="edit-label">Edit</span>
+  </button>
+
+  <aside id="side-panel" aria-hidden="true">
+    <div class="panel-header">
+      <span class="panel-brand">Tessra</span>
+      <button id="panel-close" title="Close">×</button>
+    </div>
+    <div class="panel-tabs" role="tablist">
+      <button class="panel-tab active" data-tab="widgets" role="tab">Widgets</button>
+      <button class="panel-tab" data-tab="theme" role="tab">Theme</button>
+    </div>
+
+    <div class="panel-pane" data-pane="widgets">
+      <p class="panel-hint">Drag a widget onto the page.</p>
+      <div class="widget-catalog">
+        <div class="widget-card" draggable="false" data-type="clock">
+          <div class="card-icon">◷</div><div class="card-label">Clock</div>
+        </div>
+        <div class="widget-card" data-type="search">
+          <div class="card-icon">⌕</div><div class="card-label">Search</div>
+        </div>
+        <div class="widget-card" data-type="shortcuts">
+          <div class="card-icon">▦</div><div class="card-label">Shortcuts</div>
+        </div>
+        <div class="widget-card" data-type="todo">
+          <div class="card-icon">☑</div><div class="card-label">To-do</div>
+        </div>
+        <div class="widget-card" data-type="notes">
+          <div class="card-icon">✎</div><div class="card-label">Notes</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-pane hidden" data-pane="theme">
+      <section class="control-group">
+        <h3>Background</h3>
+        <div class="seg-control" data-control="bgType">
+          <button data-value="dots">Dotted</button>
+          <button data-value="color">Color</button>
+          <button data-value="image">Image</button>
+        </div>
+        <label class="row" data-show="bgType:color,dots">
+          <span>Color</span>
+          <input type="color" id="bgColor" />
+        </label>
+        <label class="row" data-show="bgType:image">
+          <span>Image</span>
+          <input type="file" id="bgImage" accept="image/*" />
+        </label>
+        <button class="btn-subtle" id="bgImageClear" data-show="bgType:image">Clear image</button>
+      </section>
+
+      <section class="control-group">
+        <h3>Widget</h3>
+        <label class="row"><span>Fill</span><input type="color" id="widgetBg"/></label>
+        <label class="row"><span>Border</span><input type="color" id="widgetBorder"/></label>
+        <div class="slider-row">
+          <span>Border width</span>
+          <input type="range" min="0" max="4" step="1" id="widgetBorderWidth"/>
+          <input type="number" min="0" max="4" step="1" id="widgetBorderWidthN" class="num"/>
+          <span class="unit">px</span>
+        </div>
+        <div class="slider-row">
+          <span>Corner radius</span>
+          <input type="range" min="0" max="24" step="1" id="widgetRadius"/>
+          <input type="number" min="0" max="24" step="1" id="widgetRadiusN" class="num"/>
+          <span class="unit">px</span>
+        </div>
+        <div class="slider-row">
+          <span>Shadow</span>
+          <input type="range" min="0" max="100" step="1" id="widgetShadow"/>
+          <input type="number" min="0" max="100" step="1" id="widgetShadowN" class="num"/>
+          <span class="unit">%</span>
+        </div>
+      </section>
+
+      <section class="control-group">
+        <button class="btn-subtle danger" id="themeReset">Reset to defaults</button>
+      </section>
+    </div>
+  </aside>
+
+  <!-- Drag preview ghost while dragging from panel -->
+  <div id="drag-ghost" class="hidden"></div>
+
+  <!-- Templates -->
+  <template id="tpl-widget">
+    <div class="widget" tabindex="0">
+      <div class="widget-header">
+        <span class="widget-title"></span>
+        <button class="widget-remove" title="Remove">×</button>
+      </div>
+      <div class="widget-body"></div>
+    </div>
+  </template>
+
+  <script src="newtab.js"></script>
+</body>
+</html>

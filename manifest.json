@@ -1,0 +1,23 @@
+{
+  "manifest_version": 2,
+  "name": "Tessra - Custom Starting Page",
+  "short_name": "Tessra",
+  "version": "0.2.0",
+  "description": "Tessra — a lightweight, customizable starting page with placeable widgets and themes.",
+  "icons": {
+    "48": "icons/icon-48.svg",
+    "96": "icons/icon-96.svg"
+  },
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  },
+  "permissions": [
+    "storage"
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "tessra@local.dev",
+      "strict_min_version": "109.0"
+    }
+  }
+}
