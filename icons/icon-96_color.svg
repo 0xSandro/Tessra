@@ -3,11 +3,8 @@
    viewBox="0 0 96 96"
    version="1.1"
    id="svg16"
-   sodipodi:docname="icon-96.svg"
+   sodipodi:docname="icon-96_color.svg"
    inkscape:version="1.2 (dc2aeda, 2022-05-15)"
-   inkscape:export-filename="icon-96.png"
-   inkscape:export-xdpi="96"
-   inkscape:export-ydpi="96"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns="http://www.w3.org/2000/svg"
@@ -24,15 +21,15 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
      showgrid="false"
-     inkscape:zoom="2.4583333"
-     inkscape:cx="42.508475"
-     inkscape:cy="48.000001"
-     inkscape:window-width="1920"
-     inkscape:window-height="1022"
-     inkscape:window-x="0"
-     inkscape:window-y="30"
+     inkscape:zoom="7.4188689"
+     inkscape:cx="45.357318"
+     inkscape:cy="48.524917"
+     inkscape:window-width="1710"
+     inkscape:window-height="962"
+     inkscape:window-x="99"
+     inkscape:window-y="1119"
      inkscape:window-maximized="1"
-     inkscape:current-layer="g14" />
+     inkscape:current-layer="svg16" />
   <rect
      width="96"
      height="96"
@@ -49,28 +46,31 @@
        height="28"
        rx="4"
        id="rect4"
-       style="opacity:0.5" />
+       style="opacity:1;fill:#d35f5f" />
     <rect
        x="52"
        y="16"
        width="28"
        height="12"
        rx="4"
-       id="rect6" />
+       id="rect6"
+       style="fill:#deaa87" />
     <rect
        x="52"
        y="36"
        width="28"
        height="28"
        rx="4"
-       id="rect8" />
+       id="rect8"
+       style="fill:#c6afe9" />
     <rect
        x="16"
        y="52"
        width="28"
        height="28"
        rx="4"
-       id="rect10" />
+       id="rect10"
+       style="fill:#aade87" />
     <rect
        x="52"
        y="72"
@@ -78,6 +78,7 @@
        height="8"
        rx="4"
        opacity="0.5"
-       id="rect12" />
+       id="rect12"
+       style="opacity:1;fill:#ffe680" />
   </g>
 </svg>

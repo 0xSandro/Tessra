@@ -233,7 +233,7 @@ body.edit-mode #side-panel { transform: translateX(0); }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 18px 12px;
+  padding: 20px 18px 15px;
   border-bottom: 1px solid var(--panel-border);
 }
 .panel-brand { font-weight: 600; letter-spacing: 0.5px; }
