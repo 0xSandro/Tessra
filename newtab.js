@@ -29,22 +29,24 @@
     widgetBorder: '#e5e5e5',
     widgetBorderWidth: 1,
     widgetRadius: 10,
-    widgetShadow: 40         // 0..100
+    widgetShadow: 40,        // 0..100
+    showHeaders: false       // window-mode: always show widget header bar
   });
 
   const defaultState = () => ({
+    maxZ: 5,
     widgets: [
-      { id: id(), type: 'clock',     x: 40,  y: 80,  w: 280, h: 140 },
-      { id: id(), type: 'search',    x: 340, y: 80,  w: 460, h: 80  },
-      { id: id(), type: 'shortcuts', x: 40,  y: 240, w: 460, h: 240,
+      { id: id(), type: 'clock',     x: 40,  y: 80,  w: 280, h: 140, z: 1 },
+      { id: id(), type: 'search',    x: 340, y: 80,  w: 460, h: 80,  z: 2 },
+      { id: id(), type: 'shortcuts', x: 40,  y: 240, w: 460, h: 240, z: 3,
         data: { items: [
           { label: 'GitHub',      url: 'https://github.com' },
           { label: 'Hacker News', url: 'https://news.ycombinator.com' },
           { label: 'YouTube',     url: 'https://youtube.com' }
         ]}
       },
-      { id: id(), type: 'todo',  x: 520, y: 180, w: 320, h: 260, data: { todos: [] } },
-      { id: id(), type: 'notes', x: 860, y: 180, w: 320, h: 260, data: { notes: '' } }
+      { id: id(), type: 'todo',  x: 520, y: 180, w: 320, h: 260, z: 4, data: { todos: [] } },
+      { id: id(), type: 'notes', x: 860, y: 180, w: 320, h: 260, z: 5, data: { notes: '' } }
     ],
     theme: defaultTheme()
   });
@@ -71,15 +73,54 @@
     }
     s.widgets = out;
     s.theme = Object.assign(defaultTheme(), s.theme || {});
+    // Ensure every widget has a z-index, assigned in order
+    s.maxZ = s.maxZ || 0;
+    s.widgets.forEach(w => { if (!w.z) w.z = ++s.maxZ; });
     return s;
+  }
+  function bringToFront(w, node) {
+    state.maxZ = (state.maxZ || 0) + 1;
+    w.z = state.maxZ;
+    if (node) node.style.zIndex = w.z;
   }
 
   let state = null;
   let saveTimer = null;
+  // Build a clean, JSON-safe snapshot of state (strips runtime fields like _cleanup functions
+  // that break browser.storage.local's structured-clone serializer).
+  function serialize() {
+    return {
+      maxZ: state.maxZ || 0,
+      widgets: state.widgets.map(w => ({
+        id: w.id, type: w.type,
+        x: w.x, y: w.y, w: w.w, h: w.h,
+        z: w.z || 0,
+        data: w.data ? JSON.parse(JSON.stringify(w.data)) : undefined
+      })),
+      theme: state.theme ? JSON.parse(JSON.stringify(state.theme)) : null
+    };
+  }
+  let savedOnce = false;
+  function saveNow() {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    try {
+      const snapshot = serialize();
+      return store.set(STORAGE_KEY, snapshot).then(() => {
+        if (!savedOnce) { savedOnce = true; console.log('[Tessra] state persisted'); }
+      }).catch(err => console.error('[Tessra] save failed:', err));
+    } catch (err) {
+      console.error('[Tessra] serialize failed:', err);
+    }
+  }
   function scheduleSave() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => store.set(STORAGE_KEY, state), 200);
+    saveTimer = setTimeout(saveNow, 200);
   }
+  // Flush before the tab is hidden/closed so quick edits aren't lost
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveNow(); });
+  window.addEventListener('beforeunload', () => { saveNow(); });
+  window.addEventListener('pagehide', () => { saveNow(); });
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -225,6 +266,7 @@
     node.style.top    = w.y + 'px';
     node.style.width  = w.w + 'px';
     node.style.height = w.h + 'px';
+    node.style.zIndex = w.z || 1;
     node.querySelector('.widget-title').textContent = titles[w.type] || w.type;
     node.querySelector('.widget-remove').addEventListener('click', () => {
       if (w._cleanup) w._cleanup();
@@ -249,6 +291,7 @@
       startX = clientX; startY = clientY;
       ox = w.x; oy = w.y;
       node.classList.add('dragging');
+      bringToFront(w, node);
     };
     const move = (clientX, clientY) => {
       if (!dragging) return;
@@ -336,13 +379,14 @@
     const size = defaultSize[type];
     const x = Math.max(0, snap(e.clientX - size.w / 2));
     const y = Math.max(0, snap(e.clientY - size.h / 2));
-    const w = { id: id(), type, x, y, w: size.w, h: size.h };
+    state.maxZ = (state.maxZ || 0) + 1;
+    const w = { id: id(), type, x, y, w: size.w, h: size.h, z: state.maxZ };
     if (type === 'shortcuts') w.data = { items: [] };
     if (type === 'todo')      w.data = { todos: [] };
     if (type === 'notes')     w.data = { notes: '' };
     state.widgets.push(w);
     renderWidget(w);
-    scheduleSave();
+    saveNow();
   }
   panel.querySelectorAll('.widget-card').forEach(card => {
     card.addEventListener('mousedown', e => { e.preventDefault(); startCatalogDrag(card.dataset.type, e); });
@@ -373,6 +417,7 @@
       `0 1px 2px rgba(0,0,0,${(0.04 * s * 2).toFixed(3)}), 0 ${Math.round(2 + 8 * s)}px ${Math.round(8 + 24 * s)}px rgba(0,0,0,${(0.06 * s * 2).toFixed(3)})`);
     document.documentElement.style.setProperty('--widget-shadow-hover',
       `0 2px 4px rgba(0,0,0,${(0.06 * s * 2).toFixed(3)}), 0 ${Math.round(6 + 12 * s)}px ${Math.round(16 + 32 * s)}px rgba(0,0,0,${(0.08 * s * 2).toFixed(3)})`);
+    document.body.classList.toggle('always-headers', !!t.showHeaders);
   }
 
   function bindTheme() {
@@ -442,6 +487,15 @@
     bindSlider('#widgetRadius',      '#widgetRadiusN',      'widgetRadius',      24);
     bindSlider('#widgetShadow',      '#widgetShadowN',      'widgetShadow',      100);
 
+    // Window-mode toggle
+    const headers = $('#showHeaders');
+    headers.checked = !!t.showHeaders;
+    headers.addEventListener('change', () => {
+      t.showHeaders = headers.checked;
+      applyTheme();
+      saveNow();
+    });
+
     $('#themeReset').addEventListener('click', () => {
       state.theme = defaultTheme();
       // re-bind input values
@@ -451,7 +505,8 @@
       ['widgetBorderWidth','widgetRadius','widgetShadow'].forEach(k => {
         $('#'+k).value = state.theme[k]; $('#'+k+'N').value = state.theme[k];
       });
-      applyTheme(); updateSeg(); scheduleSave();
+      $('#showHeaders').checked = !!state.theme.showHeaders;
+      applyTheme(); updateSeg(); saveNow();
     });
 
     updateSeg();

@@ -75,7 +75,8 @@ body.bg-image   {
   background: rgba(0,0,0,0.02);
   user-select: none;
 }
-body.edit-mode .widget-header { display: flex; }
+body.edit-mode .widget-header,
+body.always-headers .widget-header { display: flex; }
 body.edit-mode .widget { cursor: grab; }
 
 /* Marching ants — animated dashed outline around widget in edit mode */
@@ -315,6 +316,37 @@ body.edit-mode #side-panel { transform: translateX(0); }
   border-radius: 6px; background: none; cursor: pointer;
 }
 .row input[type="file"] { font-size: 12px; max-width: 180px; }
+
+/* iOS-style toggle */
+.toggle-row { cursor: pointer; }
+.toggle {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 36px;
+  height: 20px;
+  background: rgba(0,0,0,0.15);
+  border-radius: 999px;
+  position: relative;
+  cursor: pointer;
+  outline: none;
+  border: none;
+  transition: background 0.18s ease;
+  margin: 0;
+}
+.toggle::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  transition: transform 0.18s ease;
+}
+.toggle:checked { background: var(--accent); }
+.toggle:checked::before { transform: translateX(16px); }
 
 .seg-control {
   display: grid;
