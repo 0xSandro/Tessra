@@ -6,6 +6,7 @@ register({
   icon: '⌕',
   category: 'web',
   defaultSize: { w: 460, h: 80 },
+  minSize:     { w: 240, h: 60 },
   defaultData: () => ({}),
   render(body) {
     body.innerHTML = `

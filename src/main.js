@@ -7,6 +7,7 @@
 
 import './widgets/index.js';         // side effect: registers all widgets
 import * as registry from './widget-registry.js';
+import { escapeHtml } from './utils.js';
 
 // ----- Constants -----
 const GRID = 20;
@@ -60,7 +61,8 @@ function makeWidget(type, opts = {}) {
     w: opts.w ?? def.defaultSize.w,
     h: opts.h ?? def.defaultSize.h,
     z: opts.z ?? 1,
-    data: opts.data ?? def.defaultData()
+    data:     opts.data     ?? def.defaultData(),
+    settings: opts.settings ?? (def.defaultSettings ? def.defaultSettings() : {})
   };
 }
 
@@ -103,6 +105,16 @@ function migrate(s) {
   }
   // Defensively drop unknown widget types (e.g. uninstalled extensions in future)
   s.widgets = out.filter(w => registry.has(w.type));
+  // Backfill settings on every widget; merge over defaults so new schema keys
+  // get default values while user-set values are preserved.
+  s.widgets.forEach(w => {
+    const def = registry.get(w.type);
+    if (def && def.defaultSettings) {
+      w.settings = Object.assign(def.defaultSettings(), w.settings || {});
+    } else if (!w.settings) {
+      w.settings = {};
+    }
+  });
   s.theme = Object.assign(defaultTheme(), s.theme || {});
   s.maxZ = s.maxZ || 0;
   s.widgets.forEach(w => { if (!w.z) w.z = ++s.maxZ; });
@@ -126,7 +138,8 @@ function serialize() {
       id: w.id, type: w.type,
       x: w.x, y: w.y, w: w.w, h: w.h,
       z: w.z || 0,
-      data: w.data ? JSON.parse(JSON.stringify(w.data)) : undefined
+      data:     w.data     ? JSON.parse(JSON.stringify(w.data))     : undefined,
+      settings: w.settings ? JSON.parse(JSON.stringify(w.settings)) : undefined
     })),
     theme: state.theme ? JSON.parse(JSON.stringify(state.theme)) : null
   };
@@ -175,31 +188,63 @@ function renderWidget(w) {
   node.querySelector('.widget-title').textContent = def ? def.title : `(${w.type})`;
   const body = node.querySelector('.widget-body');
 
-  const cleanups = [];
-  if (def) {
+  // Cleanup runs both on rerender and on remove. The widget's render() can
+  // register teardown via ctx.onCleanup (timers, listeners, etc.).
+  let cleanups = [];
+  function runCleanups() {
+    cleanups.forEach(fn => { try { fn(); } catch (e) { console.error(e); } });
+    cleanups = [];
+  }
+
+  function rerender() {
+    runCleanups();
+    body.innerHTML = '';
+    if (!def) {
+      body.textContent = `Unknown widget: ${w.type}`;
+      return;
+    }
+    if (!w.settings) w.settings = def.defaultSettings ? def.defaultSettings() : {};
     const ctx = {
-      data: w.data,
-      save: scheduleSave,
-      onCleanup: fn => cleanups.push(fn)
+      data:      w.data,
+      settings:  w.settings,
+      save:      scheduleSave,
+      onCleanup: fn => cleanups.push(fn),
+      rerender
     };
     try { def.render(body, ctx); }
     catch (err) {
       console.error(`[Tessra] render failed for "${w.type}":`, err);
       body.textContent = 'Widget error.';
     }
-  } else {
-    body.textContent = `Unknown widget: ${w.type}`;
+    node._cleanups = cleanups;
   }
-  node._cleanups = cleanups;
+
+  rerender();
+
+  // Settings icon: shown only when (a) widget declares a settings schema
+  // AND (b) the page is in edit mode. CSS handles the edit-mode gate via
+  // body.edit-mode .widget.has-settings .widget-settings.
+  const settingsBtn = node.querySelector('.widget-settings');
+  if (def && Array.isArray(def.settingsSchema) && def.settingsSchema.length) {
+    node.classList.add('has-settings');
+    settingsBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      SettingsPopover.open(settingsBtn, def, w, () => {
+        rerender();
+        scheduleSave();
+      });
+    });
+  }
 
   node.querySelector('.widget-remove').addEventListener('click', () => {
-    cleanups.forEach(fn => { try { fn(); } catch (e) { console.error(e); } });
+    runCleanups();
     state.widgets = state.widgets.filter(x => x.id !== w.id);
     node.remove();
     scheduleSave();
   });
 
   enableDrag(node, w);
+  enableResize(node, w);
   board.appendChild(node);
   return node;
 }
@@ -208,7 +253,7 @@ function enableDrag(node, w) {
   let startX, startY, ox, oy, dragging = false;
   const start = (clientX, clientY, target) => {
     if (!document.body.classList.contains('edit-mode')) return;
-    if (target.closest('button, input, textarea, a')) return;
+    if (target.closest('button, input, textarea, a, .widget-resize')) return;
     dragging = true;
     startX = clientX; startY = clientY;
     ox = w.x; oy = w.y;
@@ -233,6 +278,41 @@ function enableDrag(node, w) {
   node.addEventListener('mousedown', e => { start(e.clientX, e.clientY, e.target); if (dragging) e.preventDefault(); });
   window.addEventListener('mousemove', e => move(e.clientX, e.clientY));
   window.addEventListener('mouseup', end);
+}
+
+function enableResize(node, w) {
+  const handle = node.querySelector('.widget-resize');
+  if (!handle) return;
+  const def = registry.get(w.type);
+  const min = (def && def.minSize) || { w: 160, h: 80 };
+  const max = (def && def.maxSize) || { w: 4000, h: 4000 };
+
+  let startX, startY, ow, oh, resizing = false;
+
+  handle.addEventListener('mousedown', e => {
+    if (!document.body.classList.contains('edit-mode')) return;
+    e.preventDefault();
+    e.stopPropagation(); // prevent widget drag from also starting
+    resizing = true;
+    startX = e.clientX; startY = e.clientY;
+    ow = w.w; oh = w.h;
+    node.classList.add('resizing');
+    bringToFront(w, node);
+  });
+  window.addEventListener('mousemove', e => {
+    if (!resizing) return;
+    const nw = Math.max(min.w, Math.min(max.w, snap(ow + (e.clientX - startX))));
+    const nh = Math.max(min.h, Math.min(max.h, snap(oh + (e.clientY - startY))));
+    w.w = nw; w.h = nh;
+    node.style.width  = nw + 'px';
+    node.style.height = nh + 'px';
+  });
+  window.addEventListener('mouseup', () => {
+    if (!resizing) return;
+    resizing = false;
+    node.classList.remove('resizing');
+    scheduleSave();
+  });
 }
 
 // ----- Catalog (generated from registry) -----
@@ -498,6 +578,225 @@ function makeColorControl(host, getValue, setValue) {
   refresh();
   return { refresh };
 }
+
+// ----- Settings form field builders -----
+// Each builder receives (field, settings, onChange) and returns a DOM element.
+// `settings` is a reference to the widget's settings object; mutating
+// settings[field.key] updates the widget's state directly.
+
+function buildToggle(field, settings, onChange) {
+  const row = document.createElement('label');
+  row.className = 'row toggle-row';
+  row.innerHTML = `<span>${escapeHtml(field.label)}</span>`;
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.className = 'toggle';
+  input.checked = !!settings[field.key];
+  input.addEventListener('change', () => { settings[field.key] = input.checked; onChange(); });
+  row.appendChild(input);
+  return row;
+}
+
+function buildSelect(field, settings, onChange) {
+  const row = document.createElement('div');
+  row.className = 'row';
+  const label = document.createElement('span');
+  label.textContent = field.label;
+  const select = document.createElement('select');
+  select.className = 'select-input';
+  (field.options || []).forEach(opt => {
+    const o = document.createElement('option');
+    o.value = opt.value;
+    o.textContent = opt.label ?? opt.value;
+    if (settings[field.key] === opt.value) o.selected = true;
+    select.appendChild(o);
+  });
+  select.addEventListener('change', () => { settings[field.key] = select.value; onChange(); });
+  row.appendChild(label);
+  row.appendChild(select);
+  return row;
+}
+
+function buildSlider(field, settings, onChange) {
+  const min  = field.min  ?? 0;
+  const max  = field.max  ?? 100;
+  const step = field.step ?? 1;
+  const unit = field.unit ?? '';
+  const row = document.createElement('div');
+  row.className = 'slider-row';
+  row.innerHTML = `
+    <span>${escapeHtml(field.label)}</span>
+    <input type="range" min="${min}" max="${max}" step="${step}"/>
+    <input type="number" min="${min}" max="${max}" step="${step}" class="num"/>
+    <span class="unit">${escapeHtml(unit)}</span>`;
+  const r = row.querySelector('input[type=range]');
+  const n = row.querySelector('input[type=number]');
+  r.value = settings[field.key];
+  n.value = settings[field.key];
+  const set = v => {
+    v = Math.max(min, Math.min(max, +v || 0));
+    settings[field.key] = v; r.value = v; n.value = v;
+    onChange();
+  };
+  r.addEventListener('input', () => set(r.value));
+  n.addEventListener('input', () => set(n.value));
+  return row;
+}
+
+function buildColor(field, settings, onChange) {
+  const row = document.createElement('div');
+  row.className = 'row';
+  const label = document.createElement('span');
+  label.textContent = field.label;
+  const host = document.createElement('div');
+  host.className = 'color-control';
+  row.appendChild(label);
+  row.appendChild(host);
+  makeColorControl(host,
+    () => settings[field.key],
+    v => { settings[field.key] = v; onChange(); }
+  );
+  return row;
+}
+
+function buildText(field, settings, onChange) {
+  const row = document.createElement('div');
+  row.className = 'row';
+  const label = document.createElement('span');
+  label.textContent = field.label;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'text-input';
+  input.value = settings[field.key] ?? '';
+  if (field.placeholder) input.placeholder = field.placeholder;
+  input.addEventListener('input', () => { settings[field.key] = input.value; onChange(); });
+  row.appendChild(label);
+  row.appendChild(input);
+  return row;
+}
+
+function buildDate(field, settings, onChange) {
+  const row = document.createElement('div');
+  row.className = 'row';
+  const label = document.createElement('span');
+  label.textContent = field.label;
+  const input = document.createElement('input');
+  input.type = 'date';
+  input.className = 'text-input';
+  input.value = settings[field.key] ?? '';
+  input.addEventListener('input', () => { settings[field.key] = input.value; onChange(); });
+  row.appendChild(label);
+  row.appendChild(input);
+  return row;
+}
+
+const fieldBuilders = {
+  toggle: buildToggle,
+  select: buildSelect,
+  slider: buildSlider,
+  color:  buildColor,
+  text:   buildText,
+  date:   buildDate
+};
+
+function buildField(field, settings, onChange) {
+  const fn = fieldBuilders[field.type];
+  if (!fn) {
+    console.warn(`[Tessra] unknown setting type: ${field.type}`);
+    const note = document.createElement('div');
+    note.className = 'row';
+    note.textContent = `Unknown field type: ${field.type}`;
+    return note;
+  }
+  return fn(field, settings, onChange);
+}
+
+// ----- Settings popover (shared, anchored to a widget's gear icon) -----
+const SettingsPopover = (() => {
+  const pop      = document.getElementById('settings-popover');
+  const titleEl  = pop.querySelector('.settings-title');
+  const content  = pop.querySelector('.settings-content');
+  const resetBtn = pop.querySelector('.settings-reset');
+
+  let outsideHandler = null;
+  let currentDef = null;
+  let currentWidget = null;
+  let currentOnChange = null;
+
+  function rebuild() {
+    ColorPicker.close();
+    content.innerHTML = '';
+    for (const field of currentDef.settingsSchema) {
+      content.appendChild(buildField(field, currentWidget.settings, () => {
+        if (currentOnChange) currentOnChange();
+      }));
+    }
+  }
+
+  resetBtn.addEventListener('click', () => {
+    if (!currentDef || !currentWidget) return;
+    currentWidget.settings = currentDef.defaultSettings
+      ? currentDef.defaultSettings()
+      : {};
+    rebuild();
+    if (currentOnChange) currentOnChange();
+  });
+
+  function position(anchor) {
+    const rect = anchor.getBoundingClientRect();
+    const popW = 260;
+    const popH = pop.offsetHeight || 240;
+    let left = rect.right - popW;
+    if (left < 8) left = rect.left;
+    if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+    let top = rect.bottom + 8;
+    if (top + popH > window.innerHeight - 8) top = rect.top - popH - 8;
+    if (top < 8) top = 8;
+    pop.style.left = left + 'px';
+    pop.style.top  = top + 'px';
+  }
+
+  function open(anchor, def, w, onChange) {
+    close();
+    currentDef = def;
+    currentWidget = w;
+    currentOnChange = onChange;
+    titleEl.textContent = `${def.title} settings`;
+    pop.classList.remove('hidden');
+    rebuild();
+    position(anchor);
+    setTimeout(() => {
+      if (pop.classList.contains('hidden')) return;
+      outsideHandler = e => {
+        if (pop.contains(e.target)) return;
+        if (e.target.closest && e.target.closest('.widget-settings')) return;
+        if (e.target.closest && e.target.closest('#color-popover')) return;
+        close();
+      };
+      document.addEventListener('mousedown', outsideHandler);
+    }, 0);
+  }
+
+  function close() {
+    pop.classList.add('hidden');
+    if (outsideHandler) {
+      document.removeEventListener('mousedown', outsideHandler);
+      outsideHandler = null;
+    }
+    currentDef = null;
+    currentWidget = null;
+    currentOnChange = null;
+    ColorPicker.close();
+  }
+
+  window.addEventListener('resize', () => {
+    if (!pop.classList.contains('hidden') && currentDef) {
+      // Anchor is lost on resize; nothing to do beyond ensuring on-screen
+    }
+  });
+
+  return { open, close };
+})();
 
 // ----- Theme -----
 function applyTheme() {

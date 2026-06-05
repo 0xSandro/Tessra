@@ -7,6 +7,7 @@ register({
   icon: '▦',
   category: 'web',
   defaultSize: { w: 460, h: 240 },
+  minSize:     { w: 160, h: 120 },
   defaultData: () => ({ items: [] }),
   render(body, ctx) {
     const data = ctx.data;

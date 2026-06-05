@@ -7,6 +7,7 @@ register({
   icon: '☑',
   category: 'productivity',
   defaultSize: { w: 320, h: 260 },
+  minSize:     { w: 200, h: 120 },
   defaultData: () => ({ todos: [] }),
   render(body, ctx) {
     const data = ctx.data;

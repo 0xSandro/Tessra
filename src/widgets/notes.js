@@ -6,6 +6,7 @@ register({
   icon: '✎',
   category: 'productivity',
   defaultSize: { w: 320, h: 260 },
+  minSize:     { w: 180, h: 100 },
   defaultData: () => ({ notes: '' }),
   render(body, ctx) {
     const data = ctx.data;
