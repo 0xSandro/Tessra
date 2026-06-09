@@ -12,11 +12,16 @@ register({
 
   defaultSettings: () => ({
     label: 'My event',
-    date: ''   // YYYY-MM-DD
+    date: '',         // YYYY-MM-DD
+    precision: 'days' // 'days' | 'detailed'
   }),
   settingsSchema: [
     { key: 'label', type: 'text', label: 'Label', placeholder: 'e.g. Vacation' },
-    { key: 'date',  type: 'date', label: 'Date' }
+    { key: 'date',  type: 'date', label: 'Date' },
+    { key: 'precision', type: 'select', label: 'Show', options: [
+      { value: 'days',     label: 'Days only' },
+      { value: 'detailed', label: 'Days + time' }
+    ]}
   ],
 
   render(body, ctx) {
@@ -31,24 +36,45 @@ register({
     const sufEl = body.querySelector('.cd-suffix');
     const labEl = body.querySelector('.cd-label');
 
+    const pad = n => String(n).padStart(2, '0');
+
     function update() {
       labEl.textContent = settings.label || '';
       if (!settings.date) {
+        numEl.className = 'cd-number';
         numEl.textContent = '—';
         sufEl.textContent = 'set a date';
         return;
       }
-      // Compute calendar-day difference (ignore time of day, use local midnight)
       const target = new Date(settings.date + 'T00:00:00');
       if (isNaN(target.getTime())) {
+        numEl.className = 'cd-number';
         numEl.textContent = '?';
         sufEl.textContent = 'invalid date';
         return;
       }
+
+      if (settings.precision === 'detailed') {
+        const diffMs = target.getTime() - Date.now();
+        const past = diffMs <= 0;
+        const total = Math.abs(diffMs);
+        const days    = Math.floor(total / 86400000);
+        const hours   = Math.floor((total % 86400000) / 3600000);
+        const minutes = Math.floor((total % 3600000) / 60000);
+        const seconds = Math.floor((total % 60000) / 1000);
+        numEl.className = 'cd-number cd-detail';
+        numEl.textContent = days > 0
+          ? `${days}d ${pad(hours)}:${pad(minutes)}:${pad(seconds)}`
+          : `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+        sufEl.textContent = past ? 'ago' : 'remaining';
+        return;
+      }
+
+      // Days-only mode (calendar-day difference, ignoring time of day)
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const days = Math.round((target - today) / 86400000);
-
+      numEl.className = 'cd-number';
       if (days === 0) {
         numEl.textContent = 'Today';
         sufEl.textContent = '';
@@ -63,8 +89,8 @@ register({
     }
 
     update();
-    // Re-check at most once per minute — enough to roll over at midnight
-    const interval = setInterval(update, 60000);
+    const tickMs = settings.precision === 'detailed' ? 1000 : 60000;
+    const interval = setInterval(update, tickMs);
     ctx.onCleanup(() => clearInterval(interval));
   }
 });

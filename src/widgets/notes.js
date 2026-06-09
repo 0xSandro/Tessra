@@ -7,6 +7,7 @@ register({
   category: 'productivity',
   defaultSize: { w: 320, h: 260 },
   minSize:     { w: 180, h: 100 },
+  autoNumber:  true,
   defaultData: () => ({ notes: '' }),
   render(body, ctx) {
     const data = ctx.data;

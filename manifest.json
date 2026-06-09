@@ -12,7 +12,14 @@
     "newtab": "newtab.html"
   },
   "permissions": [
-    "storage"
+    "storage",
+    "tabs",
+    "history",
+    "bookmarks",
+    "sessions",
+    "topSites",
+    "https://api.open-meteo.com/*",
+    "https://geocoding-api.open-meteo.com/*"
   ],
   "browser_specific_settings": {
     "gecko": {

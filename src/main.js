@@ -44,7 +44,12 @@ const defaultTheme = () => ({
   widgetBorderWidth: 1,
   widgetRadius: 10,
   widgetShadow: 40,
-  showHeaders: true
+  showHeaders: true,
+  trafficLights: false,   // macOS-style colored dots; only effective when showHeaders is true
+  accent: '#2563eb',      // global accent (buttons, toggles, focus rings, sliders)
+  panelSide: 'right',     // 'right' | 'left'
+  darkMode: false,        // dark UI variant
+  surfaceStyle: 'flat'    // 'flat' | 'glass' | 'liquid'
 });
 
 function id() { return Math.random().toString(36).slice(2, 9); }
@@ -61,9 +66,30 @@ function makeWidget(type, opts = {}) {
     w: opts.w ?? def.defaultSize.w,
     h: opts.h ?? def.defaultSize.h,
     z: opts.z ?? 1,
+    title:    opts.title,                                                 // optional user-rename
     data:     opts.data     ?? def.defaultData(),
     settings: opts.settings ?? (def.defaultSettings ? def.defaultSettings() : {})
   };
+}
+
+// Pick the next "Base N" title for a widget type that opts into autoNumber.
+// Scans existing widgets of this type, finds the highest trailing number,
+// and returns Base (max+1). Treats a bare "Base" as N=1.
+function nextAutoTitle(type) {
+  const def = registry.get(type);
+  if (!def) return undefined;
+  const base = def.title;
+  let maxN = 0;
+  state.widgets.forEach(w => {
+    if (w.type !== type) return;
+    const t = w.title || def.title;
+    if (t === base) { maxN = Math.max(maxN, 1); return; }
+    if (t.startsWith(base + ' ')) {
+      const n = parseInt(t.slice(base.length + 1), 10);
+      if (!isNaN(n)) maxN = Math.max(maxN, n);
+    }
+  });
+  return `${base} ${maxN + 1}`;
 }
 
 function defaultState() {
@@ -76,7 +102,7 @@ function defaultState() {
       { label: 'YouTube',     url: 'https://youtube.com' }
     ]}}),
     makeWidget('todo',  { x: 520, y: 180, z: 4 }),
-    makeWidget('notes', { x: 860, y: 180, z: 5 })
+    makeWidget('notes', { x: 860, y: 180, z: 5, title: 'Notes 1' })
   ];
   return { maxZ: widgets.length, widgets, theme: defaultTheme() };
 }
@@ -116,8 +142,14 @@ function migrate(s) {
     }
   });
   s.theme = Object.assign(defaultTheme(), s.theme || {});
+  // Normalize z-order on load: renumber widgets 1..N by their existing z
+  // (preserves stacking order). Keeps maxZ small so it can never out-stack
+  // chrome layers like the side panel or settings popover.
   s.maxZ = s.maxZ || 0;
   s.widgets.forEach(w => { if (!w.z) w.z = ++s.maxZ; });
+  const sortedByZ = s.widgets.slice().sort((a, b) => (a.z || 0) - (b.z || 0));
+  sortedByZ.forEach((w, i) => { w.z = i + 1; });
+  s.maxZ = sortedByZ.length;
   return s;
 }
 
@@ -138,6 +170,7 @@ function serialize() {
       id: w.id, type: w.type,
       x: w.x, y: w.y, w: w.w, h: w.h,
       z: w.z || 0,
+      title: w.title || undefined,
       data:     w.data     ? JSON.parse(JSON.stringify(w.data))     : undefined,
       settings: w.settings ? JSON.parse(JSON.stringify(w.settings)) : undefined
     })),
@@ -185,7 +218,30 @@ function renderWidget(w) {
   node.style.width  = w.w + 'px';
   node.style.height = w.h + 'px';
   node.style.zIndex = w.z || 1;
-  node.querySelector('.widget-title').textContent = def ? def.title : `(${w.type})`;
+  const titleEl = node.querySelector('.widget-title');
+  const defaultTitle = def ? def.title : `(${w.type})`;
+  titleEl.textContent = w.title || defaultTitle;
+  // Editable title — typing updates w.title; Enter / blur commits; Escape reverts
+  titleEl.addEventListener('blur', () => {
+    const next = (titleEl.textContent || '').trim();
+    if (!next || next === defaultTitle) {
+      delete w.title;
+      titleEl.textContent = defaultTitle;
+    } else {
+      w.title = next;
+    }
+    scheduleSave();
+  });
+  titleEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); titleEl.blur(); }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      titleEl.textContent = w.title || defaultTitle;
+      titleEl.blur();
+    }
+  });
+  // Stop drag from starting when clicking inside the title
+  titleEl.addEventListener('mousedown', e => e.stopPropagation());
   const body = node.querySelector('.widget-body');
 
   // Cleanup runs both on rerender and on remove. The widget's render() can
@@ -252,8 +308,14 @@ function renderWidget(w) {
 function enableDrag(node, w) {
   let startX, startY, ox, oy, dragging = false;
   const start = (clientX, clientY, target) => {
-    if (!document.body.classList.contains('edit-mode')) return;
-    if (target.closest('button, input, textarea, a, .widget-resize')) return;
+    const inEdit = document.body.classList.contains('edit-mode');
+    const inWindowMode = document.body.classList.contains('always-headers');
+    if (!inEdit) {
+      // Outside edit mode, only allow drag from the header (window-style mode)
+      if (!inWindowMode) return;
+      if (!target.closest('.widget-header')) return;
+    }
+    if (target.closest('button, input, textarea, a, select, .widget-resize, [contenteditable]')) return;
     dragging = true;
     startX = clientX; startY = clientY;
     ox = w.x; oy = w.y;
@@ -315,20 +377,83 @@ function enableResize(node, w) {
   });
 }
 
-// ----- Catalog (generated from registry) -----
+// ----- Catalog (grouped by category, with search) -----
+const CATEGORY_ORDER  = ['time', 'productivity', 'web', 'info', 'developer', 'random', 'other'];
+const CATEGORY_LABELS = {
+  time:         'Time',
+  productivity: 'Productivity',
+  web:          'Web',
+  info:         'Info',
+  developer:    'Developer',
+  random:       'Random',
+  other:        'Other'
+};
+
 function populateCatalog() {
   const host = document.getElementById('widget-catalog');
   if (!host) return;
-  host.innerHTML = '';
+
+  // Group registered widgets by category
+  const byCategory = {};
   for (const def of registry.all()) {
-    const card = document.createElement('div');
-    card.className = 'widget-card';
-    card.dataset.type = def.type;
-    card.innerHTML = `
-      <div class="card-icon">${def.icon || '◻'}</div>
-      <div class="card-label">${def.title}</div>`;
-    card.addEventListener('mousedown', e => { e.preventDefault(); startCatalogDrag(def.type, e); });
-    host.appendChild(card);
+    const cat = def.category || 'other';
+    (byCategory[cat] ||= []).push(def);
+  }
+
+  // Render sections in fixed order; any unknown category goes under 'Other' at the end
+  host.innerHTML = '';
+  const seen = new Set();
+  const renderSection = (cat) => {
+    const defs = byCategory[cat];
+    if (!defs || !defs.length) return;
+    const section = document.createElement('div');
+    section.className = 'catalog-section';
+    section.dataset.category = cat;
+    section.innerHTML = `<h4 class="catalog-section-title">${CATEGORY_LABELS[cat] || cat}</h4>`;
+    const grid = document.createElement('div');
+    grid.className = 'catalog-grid';
+    defs.forEach(def => {
+      const card = document.createElement('div');
+      card.className = 'widget-card';
+      card.dataset.type  = def.type;
+      card.dataset.label = (def.title || def.type).toLowerCase();
+      card.innerHTML = `
+        <div class="card-icon">${def.icon || '◻'}</div>
+        <div class="card-label">${def.title}</div>`;
+      card.addEventListener('mousedown', e => { e.preventDefault(); startCatalogDrag(def.type, e); });
+      grid.appendChild(card);
+    });
+    section.appendChild(grid);
+    host.appendChild(section);
+    seen.add(cat);
+  };
+  CATEGORY_ORDER.forEach(renderSection);
+  // Catch any custom category that isn't in CATEGORY_ORDER
+  Object.keys(byCategory).filter(c => !seen.has(c)).forEach(renderSection);
+
+  // Wire up the search input (idempotent — only attaches once)
+  const search = document.getElementById('catalog-search');
+  const empty  = document.querySelector('.catalog-empty');
+  if (search && !search._wired) {
+    search._wired = true;
+    const apply = () => {
+      const q = search.value.toLowerCase().trim();
+      let anyVisible = false;
+      document.querySelectorAll('.widget-card').forEach(card => {
+        const match = !q || card.dataset.label.includes(q);
+        card.classList.toggle('hidden', !match);
+        if (match) anyVisible = true;
+      });
+      document.querySelectorAll('.catalog-section').forEach(section => {
+        const sectionHas = section.querySelector('.widget-card:not(.hidden)');
+        section.classList.toggle('hidden', !sectionHas);
+      });
+      if (empty) empty.classList.toggle('hidden', anyVisible || !q);
+    };
+    search.addEventListener('input', apply);
+    search.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { search.value = ''; apply(); search.blur(); }
+    });
   }
 }
 
@@ -399,6 +524,7 @@ function dropGhost(e) {
   const y = Math.max(0, snap(e.clientY - size.h / 2));
   state.maxZ = (state.maxZ || 0) + 1;
   const w = makeWidget(type, { x, y, z: state.maxZ });
+  if (def.autoNumber) w.title = nextAutoTitle(type);
   state.widgets.push(w);
   renderWidget(w);
   saveNow();
@@ -604,13 +730,35 @@ function buildSelect(field, settings, onChange) {
   label.textContent = field.label;
   const select = document.createElement('select');
   select.className = 'select-input';
-  (field.options || []).forEach(opt => {
-    const o = document.createElement('option');
-    o.value = opt.value;
-    o.textContent = opt.label ?? opt.value;
-    if (settings[field.key] === opt.value) o.selected = true;
-    select.appendChild(o);
-  });
+
+  function populate(opts) {
+    select.innerHTML = '';
+    (opts || []).forEach(opt => {
+      const o = document.createElement('option');
+      o.value = opt.value;
+      o.textContent = opt.label ?? opt.value;
+      if (settings[field.key] === opt.value) o.selected = true;
+      select.appendChild(o);
+    });
+  }
+
+  // Options may be a static array, a sync function returning an array, or
+  // an async function returning a Promise (e.g. fetched bookmark folders).
+  if (typeof field.options === 'function') {
+    const result = field.options();
+    if (result && typeof result.then === 'function') {
+      select.innerHTML = '<option>Loading…</option>';
+      result.then(populate).catch(err => {
+        console.error('[Tessra] options load failed:', err);
+        select.innerHTML = '<option>Error loading options</option>';
+      });
+    } else {
+      populate(result);
+    }
+  } else {
+    populate(field.options);
+  }
+
   select.addEventListener('change', () => { settings[field.key] = select.value; onChange(); });
   row.appendChild(label);
   row.appendChild(select);
@@ -801,26 +949,50 @@ const SettingsPopover = (() => {
 // ----- Theme -----
 function applyTheme() {
   const t = state.theme;
+  const dark = !!t.darkMode;
+  document.body.classList.toggle('dark-mode', dark);
+
   document.body.classList.remove('bg-color', 'bg-image');
   if (t.bgType === 'color') {
     document.body.classList.add('bg-color');
-    document.documentElement.style.setProperty('--bg', t.bgColor);
   } else if (t.bgType === 'image' && t.bgImage) {
     document.body.classList.add('bg-image');
     document.documentElement.style.setProperty('--bg-image-url', `url("${t.bgImage}")`);
-  } else {
-    document.documentElement.style.setProperty('--bg', t.bgColor);
   }
-  document.documentElement.style.setProperty('--widget-bg', t.widgetBg);
-  document.documentElement.style.setProperty('--widget-border', t.widgetBorder);
+
+  if (!dark) {
+    // Light mode: apply the user's chosen colors inline (overriding :root defaults)
+    document.documentElement.style.setProperty('--bg', t.bgColor);
+    document.documentElement.style.setProperty('--widget-bg', t.widgetBg);
+    document.documentElement.style.setProperty('--widget-border', t.widgetBorder);
+  } else {
+    // Dark mode: clear inline overrides so body.dark-mode CSS provides dark surfaces.
+    // User-customized colors are preserved in state and will reappear when toggled off.
+    document.documentElement.style.removeProperty('--bg');
+    document.documentElement.style.removeProperty('--widget-bg');
+    document.documentElement.style.removeProperty('--widget-border');
+  }
   document.documentElement.style.setProperty('--widget-border-width', t.widgetBorderWidth + 'px');
   document.documentElement.style.setProperty('--widget-radius', t.widgetRadius + 'px');
+  // Shadows: punch up alpha in dark mode so shadows still register on dark surfaces
   const s = t.widgetShadow / 100;
+  const shA = dark ? 2.2 : 1;
   document.documentElement.style.setProperty('--widget-shadow',
-    `0 1px 2px rgba(0,0,0,${(0.04 * s * 2).toFixed(3)}), 0 ${Math.round(2 + 8 * s)}px ${Math.round(8 + 24 * s)}px rgba(0,0,0,${(0.06 * s * 2).toFixed(3)})`);
+    `0 1px 2px rgba(0,0,0,${(0.04 * s * 2 * shA).toFixed(3)}), 0 ${Math.round(2 + 8 * s)}px ${Math.round(8 + 24 * s)}px rgba(0,0,0,${(0.06 * s * 2 * shA).toFixed(3)})`);
   document.documentElement.style.setProperty('--widget-shadow-hover',
-    `0 2px 4px rgba(0,0,0,${(0.06 * s * 2).toFixed(3)}), 0 ${Math.round(6 + 12 * s)}px ${Math.round(16 + 32 * s)}px rgba(0,0,0,${(0.08 * s * 2).toFixed(3)})`);
+    `0 2px 4px rgba(0,0,0,${(0.06 * s * 2 * shA).toFixed(3)}), 0 ${Math.round(6 + 12 * s)}px ${Math.round(16 + 32 * s)}px rgba(0,0,0,${(0.08 * s * 2 * shA).toFixed(3)})`);
   document.body.classList.toggle('always-headers', !!t.showHeaders);
+  // Traffic lights only apply when window-style headers are also on
+  document.body.classList.toggle('traffic-lights', !!t.showHeaders && !!t.trafficLights);
+  // Panel side
+  document.body.classList.toggle('panel-left', t.panelSide === 'left');
+  // Accent colour drives a CSS variable consumed throughout the stylesheet
+  document.documentElement.style.setProperty('--accent', t.accent || '#2563eb');
+  // Surface style (flat / glass / liquid). CSS rules in body.surface-* override
+  // widget/panel/popover backgrounds and shadows without touching the user's
+  // saved widget colors.
+  document.body.classList.toggle('surface-glass',  t.surfaceStyle === 'glass');
+  document.body.classList.toggle('surface-liquid', t.surfaceStyle === 'liquid');
 }
 
 function bindTheme() {
@@ -942,11 +1114,65 @@ function bindTheme() {
   bindSlider('#widgetRadius',      '#widgetRadiusN',      'widgetRadius',      24);
   bindSlider('#widgetShadow',      '#widgetShadowN',      'widgetShadow',      100);
 
+  // Surface style segmented control
+  const surfaceSeg = panel.querySelector('[data-control="surfaceStyle"]');
+  function updateSurfaceActive() {
+    if (!surfaceSeg) return;
+    surfaceSeg.querySelectorAll('button').forEach(b =>
+      b.classList.toggle('active', b.dataset.value === (t.surfaceStyle || 'flat')));
+  }
+  if (surfaceSeg) {
+    surfaceSeg.querySelectorAll('button').forEach(b => {
+      b.addEventListener('click', () => {
+        t.surfaceStyle = b.dataset.value;
+        applyTheme();
+        updateSurfaceActive();
+        saveNow();
+      });
+    });
+    updateSurfaceActive();
+  }
+
+  // Dark mode toggle
+  const darkCb = $('#darkMode');
+  if (darkCb) {
+    darkCb.checked = !!t.darkMode;
+    darkCb.addEventListener('change', () => {
+      t.darkMode = darkCb.checked;
+      applyTheme();
+      saveNow();
+    });
+  }
+
+  // Panel-side flip button (in panel header)
+  const flipBtn = document.getElementById('panel-flip');
+  if (flipBtn) {
+    flipBtn.addEventListener('click', () => {
+      t.panelSide = t.panelSide === 'left' ? 'right' : 'left';
+      applyTheme();
+      saveNow();
+    });
+  }
+
   // Headers toggle
   const headers = $('#showHeaders');
+  const trafficCb = $('#trafficLights');
+  const updateTrafficState = () => {
+    const enabled = headers.checked;
+    trafficCb.disabled = !enabled;
+    trafficCb.closest('.row').classList.toggle('disabled', !enabled);
+  };
   headers.checked = !!t.showHeaders;
+  trafficCb.checked = !!t.trafficLights;
+  updateTrafficState();
   headers.addEventListener('change', () => {
     t.showHeaders = headers.checked;
+    applyTheme();
+    saveNow();
+    updateTrafficState();
+  });
+  trafficCb.addEventListener('change', () => {
+    t.trafficLights = trafficCb.checked;
     applyTheme();
     saveNow();
   });
@@ -969,6 +1195,9 @@ function bindTheme() {
     Object.keys(colorControls).forEach(k => colorControls[k].refresh());
     Object.keys(sliders).forEach(k => sliders[k].refresh());
     $('#showHeaders').checked = !!t.showHeaders;
+    if ($('#trafficLights')) $('#trafficLights').checked = !!t.trafficLights;
+    if ($('#darkMode'))      $('#darkMode').checked      = !!t.darkMode;
+    updateSurfaceActive();
     refreshImagePreview();
     applyTheme(); updateSeg(); saveNow();
   });

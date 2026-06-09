@@ -1,5 +1,15 @@
 import { register } from '../widget-registry.js';
 
+const ENGINES = {
+  duckduckgo: { label: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=' },
+  google:     { label: 'Google',     url: 'https://www.google.com/search?q=' },
+  bing:       { label: 'Bing',       url: 'https://www.bing.com/search?q=' },
+  brave:      { label: 'Brave',      url: 'https://search.brave.com/search?q=' },
+  startpage:  { label: 'Startpage',  url: 'https://www.startpage.com/do/search?query=' },
+  ecosia:     { label: 'Ecosia',     url: 'https://www.ecosia.org/search?q=' },
+  yahoo:      { label: 'Yahoo',      url: 'https://search.yahoo.com/search?p=' }
+};
+
 register({
   type: 'search',
   title: 'Search',
@@ -8,18 +18,35 @@ register({
   defaultSize: { w: 460, h: 80 },
   minSize:     { w: 240, h: 60 },
   defaultData: () => ({}),
-  render(body) {
+
+  defaultSettings: () => ({
+    engine: 'duckduckgo'
+  }),
+  settingsSchema: [
+    { key: 'engine', type: 'select', label: 'Engine', options:
+      Object.entries(ENGINES).map(([value, e]) => ({ value, label: e.label }))
+    }
+  ],
+
+  render(body, ctx) {
+    const { settings } = ctx;
+    const engine = ENGINES[settings.engine] || ENGINES.duckduckgo;
+
     body.innerHTML = `
       <form class="search-form">
-        <input class="search-input" type="text" placeholder="Search the web..."/>
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"/>
+          <line x1="16.5" y1="16.5" x2="21" y2="21"/>
+        </svg>
+        <input class="search-input" type="text" placeholder="Search ${engine.label}…" autocomplete="off"/>
       </form>`;
-    const form = body.querySelector('form');
+    const form  = body.querySelector('form');
     const input = body.querySelector('input');
     form.addEventListener('submit', e => {
       e.preventDefault();
       const q = input.value.trim();
       if (!q) return;
-      window.location.href = 'https://duckduckgo.com/?q=' + encodeURIComponent(q);
+      window.location.href = engine.url + encodeURIComponent(q);
     });
   }
 });

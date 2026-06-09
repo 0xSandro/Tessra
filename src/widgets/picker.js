@@ -4,7 +4,7 @@ import { escapeHtml } from '../utils.js';
 register({
   type: 'picker',
   title: 'Random Picker',
-  icon: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M21 3l-8 8"/><path d="M8 21l8-8"/><path d="M3 16v5h5"/><path d="M3 8l5-5 5 5"/></svg>',
+  icon: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>',
   category: 'random',
   defaultSize: { w: 280, h: 280 },
   minSize:     { w: 220, h: 200 },
@@ -66,6 +66,10 @@ register({
         renderList();
       }
       refreshResult();
+      // Restart the flash animation even if the picked value is the same as before
+      resultEl.classList.remove('picker-flash');
+      void resultEl.offsetWidth; // force reflow
+      resultEl.classList.add('picker-flash');
       ctx.save();
     });
 

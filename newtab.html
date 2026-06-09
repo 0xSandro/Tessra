@@ -27,21 +27,48 @@
         </svg>
         Tessra
       </span>
-      <button id="panel-close" title="Close">×</button>
+      <div class="panel-header-actions">
+        <button id="panel-flip" title="Move panel to other side" aria-label="Flip panel side">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="9 18 3 12 9 6"/>
+            <polyline points="15 6 21 12 15 18"/>
+          </svg>
+        </button>
+        <button id="panel-close" title="Close">×</button>
+      </div>
     </div>
     <div class="panel-tabs" role="tablist">
       <button class="panel-tab active" data-tab="widgets" role="tab">Widgets</button>
-      <button class="panel-tab" data-tab="theme" role="tab">Theme</button>
+      <button class="panel-tab" data-tab="theme"   role="tab">Theme</button>
+      <button class="panel-tab" data-tab="presets" role="tab">Presets</button>
     </div>
 
     <div class="panel-pane" data-pane="widgets">
-      <p class="panel-hint">Drag a widget onto the page.</p>
+      <input type="text" id="catalog-search" class="catalog-search" placeholder="Search widgets…" autocomplete="off" spellcheck="false"/>
       <div class="widget-catalog" id="widget-catalog">
-        <!-- Cards generated from the widget registry -->
+        <!-- Sections + cards generated from the widget registry -->
       </div>
+      <div class="catalog-empty hidden">No widgets match your search.</div>
     </div>
 
     <div class="panel-pane hidden" data-pane="theme">
+      <section class="control-group">
+        <label class="row toggle-row">
+          <span>Dark mode</span>
+          <input type="checkbox" id="darkMode" class="toggle"/>
+        </label>
+      </section>
+
+      <section class="control-group">
+        <h3>Surface style</h3>
+        <div class="seg-control" data-control="surfaceStyle">
+          <button data-value="flat">Flat</button>
+          <button data-value="glass">Glass</button>
+          <button data-value="liquid">Liquid</button>
+        </div>
+        <p class="panel-microhint">Glass effects look best with a background image.</p>
+      </section>
+
       <section class="control-group">
         <h3>Background</h3>
         <div class="seg-control" data-control="bgType">
@@ -84,10 +111,23 @@
       </section>
 
       <section class="control-group">
+        <h3>Accent</h3>
+        <div class="row">
+          <span>Color</span>
+          <div class="color-control" data-key="accent"></div>
+          <button class="reset-btn" data-reset="accent" title="Reset to default" aria-label="Reset"></button>
+        </div>
+      </section>
+
+      <section class="control-group">
         <h3>Widget</h3>
         <label class="row toggle-row">
           <span>Window-style headers</span>
           <input type="checkbox" id="showHeaders" class="toggle"/>
+        </label>
+        <label class="row toggle-row toggle-sub">
+          <span>Traffic-light dots</span>
+          <input type="checkbox" id="trafficLights" class="toggle"/>
         </label>
         <div class="row">
           <span>Fill</span>
@@ -126,6 +166,66 @@
         <button class="btn-subtle danger" id="themeReset">Reset everything to defaults</button>
       </section>
     </div>
+
+    <div class="panel-pane hidden" data-pane="presets">
+      <p class="panel-hint">Save your setup or load a built-in layout.</p>
+
+      <section class="control-group">
+        <h3>Your setup</h3>
+        <div class="presets-actions">
+          <button class="btn-subtle" disabled>Export current layout…</button>
+          <button class="btn-subtle" disabled>Import preset…</button>
+        </div>
+        <p class="presets-note">Import / export coming soon.</p>
+      </section>
+
+      <section class="control-group">
+        <h3>Built-in presets</h3>
+        <div class="preset-grid">
+          <div class="preset-card preset-disabled" data-preset="minimal">
+            <div class="preset-thumb">◷</div>
+            <div class="preset-info">
+              <div class="preset-name">Minimal</div>
+              <div class="preset-desc">Just a clock and search</div>
+            </div>
+            <span class="preset-soon">Soon</span>
+          </div>
+          <div class="preset-card preset-disabled" data-preset="productivity">
+            <div class="preset-thumb">☑</div>
+            <div class="preset-info">
+              <div class="preset-name">Productivity</div>
+              <div class="preset-desc">Todo, notes, habits, goals, pomodoro</div>
+            </div>
+            <span class="preset-soon">Soon</span>
+          </div>
+          <div class="preset-card preset-disabled" data-preset="developer">
+            <div class="preset-thumb">⌘</div>
+            <div class="preset-info">
+              <div class="preset-name">Developer</div>
+              <div class="preset-desc">JSON, regex, markdown, system info</div>
+            </div>
+            <span class="preset-soon">Soon</span>
+          </div>
+          <div class="preset-card preset-disabled" data-preset="browse">
+            <div class="preset-thumb">⌕</div>
+            <div class="preset-info">
+              <div class="preset-name">Browse</div>
+              <div class="preset-desc">Search, shortcuts, browser stats</div>
+            </div>
+            <span class="preset-soon">Soon</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="panel-footer">
+      <span class="panel-footer-text">made by <strong>0xSandro</strong></span>
+      <a class="panel-footer-link" href="https://github.com/0xSandro/Tessra" target="_blank" rel="noopener" title="View Tessra on GitHub" aria-label="GitHub repository">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+          <path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+        </svg>
+      </a>
+    </div>
   </aside>
 
   <!-- Per-widget settings popover (auto-generated from settingsSchema) -->
@@ -162,15 +262,17 @@
   <template id="tpl-widget">
     <div class="widget" tabindex="0">
       <div class="widget-header">
-        <span class="widget-title"></span>
-        <div class="widget-actions">
-          <button class="widget-settings" title="Settings">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-            </svg>
-          </button>
-          <button class="widget-remove" title="Remove">×</button>
+        <button class="widget-remove" title="Remove">×</button>
+        <span class="tl-yellow" aria-hidden="true"></span>
+        <span class="tl-green" aria-hidden="true"></span>
+        <div class="widget-title-wrap">
+          <span class="widget-title" contenteditable="true" spellcheck="false"></span>
         </div>
+        <button class="widget-settings" title="Settings">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+          </svg>
+        </button>
       </div>
       <div class="widget-body"></div>
       <div class="widget-resize" title="Resize" aria-hidden="true"></div>

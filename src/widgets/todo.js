@@ -11,10 +11,16 @@ register({
   defaultData: () => ({ todos: [] }),
   render(body, ctx) {
     const data = ctx.data;
-    const render = () => {
-      body.innerHTML = '';
-      const ul = document.createElement('ul');
-      ul.className = 'todo-list';
+    body.innerHTML = `
+      <div class="todo">
+        <ul class="todo-list"></ul>
+        <input class="todo-input" placeholder="Add task and press Enter"/>
+      </div>`;
+    const listEl  = body.querySelector('.todo-list');
+    const inputEl = body.querySelector('.todo-input');
+
+    function renderList() {
+      listEl.innerHTML = '';
       data.todos.forEach((t, idx) => {
         const li = document.createElement('li');
         li.className = t.done ? 'done' : '';
@@ -23,25 +29,24 @@ register({
           <span class="todo-text">${escapeHtml(t.text)}</span>
           <button class="todo-del" title="Remove">×</button>`;
         li.querySelector('input').addEventListener('change', e => {
-          t.done = e.target.checked; render(); ctx.save();
+          t.done = e.target.checked; renderList(); ctx.save();
         });
         li.querySelector('.todo-del').addEventListener('click', () => {
-          data.todos.splice(idx, 1); render(); ctx.save();
+          data.todos.splice(idx, 1); renderList(); ctx.save();
         });
-        ul.appendChild(li);
+        listEl.appendChild(li);
       });
-      body.appendChild(ul);
-      const inp = document.createElement('input');
-      inp.className = 'todo-input';
-      inp.placeholder = 'Add task and press Enter';
-      inp.addEventListener('keydown', e => {
-        if (e.key === 'Enter' && inp.value.trim()) {
-          data.todos.push({ text: inp.value.trim(), done: false });
-          inp.value = ''; render(); ctx.save();
-        }
-      });
-      body.appendChild(inp);
-    };
-    render();
+    }
+
+    inputEl.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && inputEl.value.trim()) {
+        data.todos.push({ text: inputEl.value.trim(), done: false });
+        inputEl.value = '';
+        renderList();
+        ctx.save();
+      }
+    });
+
+    renderList();
   }
 });
