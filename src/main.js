@@ -49,7 +49,9 @@ const defaultTheme = () => ({
   accent: '#2563eb',      // global accent (buttons, toggles, focus rings, sliders)
   panelSide: 'right',     // 'right' | 'left'
   darkMode: false,        // dark UI variant
-  surfaceStyle: 'flat'    // 'flat' | 'glass' | 'liquid'
+  surfaceStyle: 'liquid', // 'flat' | 'glass' | 'liquid'
+  glassBlur: 22,          // backdrop-filter blur in px (only used when glass/liquid)
+  glassAlpha: 55          // background opacity 10-90 (translated to 0.10-0.90 in CSS)
 });
 
 function id() { return Math.random().toString(36).slice(2, 9); }
@@ -1024,6 +1026,9 @@ function applyTheme() {
   // saved widget colors.
   document.body.classList.toggle('surface-glass',  t.surfaceStyle === 'glass');
   document.body.classList.toggle('surface-liquid', t.surfaceStyle === 'liquid');
+  // Glass tuning vars (only meaningful when surfaceStyle is glass or liquid)
+  document.documentElement.style.setProperty('--glass-blur', (t.glassBlur ?? 22) + 'px');
+  document.documentElement.style.setProperty('--glass-alpha', ((t.glassAlpha ?? 55) / 100).toFixed(3));
 }
 
 function bindTheme() {
@@ -1144,6 +1149,8 @@ function bindTheme() {
   bindSlider('#widgetBorderWidth', '#widgetBorderWidthN', 'widgetBorderWidth', 4);
   bindSlider('#widgetRadius',      '#widgetRadiusN',      'widgetRadius',      24);
   bindSlider('#widgetShadow',      '#widgetShadowN',      'widgetShadow',      100);
+  bindSlider('#glassBlur',         '#glassBlurN',         'glassBlur',         60);
+  bindSlider('#glassAlpha',        '#glassAlphaN',        'glassAlpha',        90);
 
   // Surface style segmented control
   const surfaceSeg = panel.querySelector('[data-control="surfaceStyle"]');
@@ -1158,6 +1165,7 @@ function bindTheme() {
         t.surfaceStyle = b.dataset.value;
         applyTheme();
         updateSurfaceActive();
+        updateSeg();   // refresh data-show=surfaceStyle:... visibility
         saveNow();
       });
     });

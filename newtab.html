@@ -67,6 +67,20 @@
           <button data-value="liquid">Liquid</button>
         </div>
         <p class="panel-microhint">Glass effects look best with a background image.</p>
+        <div class="slider-row" data-show="surfaceStyle:glass,liquid">
+          <span>Blur</span>
+          <input type="range" min="5" max="60" step="1" id="glassBlur"/>
+          <input type="number" min="5" max="60" step="1" id="glassBlurN" class="num"/>
+          <span class="unit">px</span>
+          <button class="reset-btn" data-reset="glassBlur" title="Reset to default" aria-label="Reset"></button>
+        </div>
+        <div class="slider-row" data-show="surfaceStyle:glass,liquid">
+          <span>Transparency</span>
+          <input type="range" min="10" max="90" step="1" id="glassAlpha"/>
+          <input type="number" min="10" max="90" step="1" id="glassAlphaN" class="num"/>
+          <span class="unit">%</span>
+          <button class="reset-btn" data-reset="glassAlpha" title="Reset to default" aria-label="Reset"></button>
+        </div>
       </section>
 
       <section class="control-group">

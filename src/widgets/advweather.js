@@ -165,40 +165,61 @@ register({
       }
       html += `</div>`;
 
-      // Hourly strip (next ~12 hours from "now")
+      // Hourly strip (next ~12 hours).
       // Open-Meteo returns naive local-timezone ISO strings ("2026-06-08T14:00")
-      // so we compare them directly against current.time as strings — this
-      // avoids JS interpreting them as the user's local timezone, which would
-      // be wrong whenever the user is in a different zone than the location.
-      const hourly = data.weather.hourly;
-      if (settings.showHourly && hourly && Array.isArray(hourly.time) && hourly.time.length > 0) {
-        const currentTime = cur.time || hourly.time[0];
-        const currentHourPrefix = (currentTime || '').slice(0, 13); // YYYY-MM-DDTHH
-        // Find the slot whose hour matches "now"
-        let startIdx = hourly.time.findIndex(t => t && t.slice(0, 13) === currentHourPrefix);
-        // Fallback: first slot at or after current time
-        if (startIdx < 0) startIdx = hourly.time.findIndex(t => t && t >= currentTime);
-        if (startIdx < 0) startIdx = 0;
-        const slice = Math.min(12, hourly.time.length - startIdx);
-        if (slice > 0) {
-          html += `<div class="aw-hourly">`;
-          for (let i = 0; i < slice; i++) {
-            const idx = startIdx + i;
-            if (!hourly.time[idx]) continue;
-            const t = new Date(hourly.time[idx]);
-            const label = i === 0 ? 'Now' : formatHour(t);
-            const hCode = hourly.weather_code?.[idx];
-            const hInfo = weatherInfo[hCode] || { emoji: '?' };
-            const tempRaw = hourly.temperature_2m?.[idx];
-            const hTemp = (tempRaw == null) ? '—' : Math.round(tempRaw) + '°';
-            html += `
-              <div class="aw-hour">
-                <div class="aw-hour-time">${escapeHtml(label)}</div>
-                <div class="aw-hour-icon">${hInfo.emoji}</div>
-                <div class="aw-hour-temp">${hTemp}</div>
-              </div>`;
+      // — we compare them as strings to avoid timezone-confusion bugs when the
+      // user's timezone differs from the location's.
+      if (settings.showHourly) {
+        const hourly = data.weather.hourly;
+        const times  = hourly?.time;
+        const temps  = hourly?.temperature_2m;
+        const codes  = hourly?.weather_code;
+
+        if (Array.isArray(times) && times.length > 0) {
+          const currentTime = cur.time || times[0];
+          const hourPrefix  = String(currentTime).slice(0, 13); // YYYY-MM-DDTHH
+          let startIdx = times.findIndex(t => typeof t === 'string' && t.slice(0, 13) === hourPrefix);
+          if (startIdx < 0) startIdx = times.findIndex(t => typeof t === 'string' && t >= currentTime);
+          if (startIdx < 0) startIdx = 0;
+
+          const slice = Math.min(12, times.length - startIdx);
+          if (slice > 0) {
+            html += `<div class="aw-hourly">`;
+            for (let i = 0; i < slice; i++) {
+              const idx = startIdx + i;
+              const timeStr = times[idx];
+              if (!timeStr) continue;
+              let label;
+              if (i === 0) {
+                label = 'Now';
+              } else {
+                const parsed = new Date(timeStr);
+                label = isNaN(parsed.getTime()) ? timeStr.slice(11, 16) : formatHour(parsed);
+              }
+              const code   = Array.isArray(codes) ? codes[idx] : undefined;
+              const info   = weatherInfo[code] || { emoji: '·' };
+              const temp   = Array.isArray(temps) ? temps[idx] : null;
+              const tempStr = (temp == null || isNaN(temp)) ? '—' : Math.round(temp) + '°';
+              html += `
+                <div class="aw-hour">
+                  <div class="aw-hour-time">${escapeHtml(label)}</div>
+                  <div class="aw-hour-icon">${info.emoji}</div>
+                  <div class="aw-hour-temp">${tempStr}</div>
+                </div>`;
+            }
+            html += `</div>`;
+          } else {
+            html += `<div class="aw-hourly-empty">Hourly forecast unavailable</div>`;
           }
-          html += `</div>`;
+        } else {
+          // Surface this loudly so it's obvious the data is missing rather
+          // than the section being silently skipped.
+          html += `<div class="aw-hourly-empty">Hourly forecast unavailable</div>`;
+          console.warn('[advweather] hourly missing from payload', {
+            hasHourly: !!hourly,
+            keys: hourly ? Object.keys(hourly) : null,
+            timesType: typeof times
+          });
         }
       }
 
@@ -257,8 +278,8 @@ register({
           data.weather = null;
         }
         const stale = !data.weather
-          || !data.weather.hourly      // old payload that didn't request hourly
-          || !data.weather.daily       // ... or daily
+          || !data.weather.hourly?.time?.length   // cached payload missing hourly
+          || !data.weather.daily?.time?.length    // ... or daily
           || data.weatherUnits   !== settings.temperatureUnit
           || data.weatherWindUnit !== settings.windUnit
           || (Date.now() - (data.fetchedAt || 0)) > 10 * 60 * 1000;

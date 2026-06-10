@@ -66,7 +66,9 @@ function formatAge(ms) {
 }
 
 async function fetchTop(limit) {
-  const url = `https://gamma-api.polymarket.com/markets?limit=${encodeURIComponent(limit)}&active=true&closed=false&order=volume24hr&ascending=false`;
+  // Sort by last-30-day trading volume — favours markets that are active now,
+  // not just lifetime giants. Falls back to lifetime volume if 30d isn't available.
+  const url = `https://gamma-api.polymarket.com/markets?limit=${encodeURIComponent(limit)}&active=true&closed=false&order=volume1mo&ascending=false`;
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return await res.json();
@@ -190,7 +192,10 @@ register({
             </div>`).join('');
         }
 
-        const vol = formatVolume(m.volume24hr || m.volume);
+        // Prefer 30-day volume for the meta line (matches our sort)
+        const vol30 = m.volume1mo;
+        const volLabel = vol30 != null ? '30d' : 'Vol';
+        const vol = formatVolume(vol30 ?? m.volume ?? m.volume24hr);
         const endStr = formatEnd(m.endDate || m.end_date_iso);
         const url = `https://polymarket.com/event/${escapeHtml(m.slug || '')}`;
         const isPinned = pinned.has(m.slug);
@@ -203,7 +208,7 @@ register({
             </div>
             <div class="poly-outcomes">${outcomesHtml}</div>
             <div class="poly-meta">
-              <span>Vol ${escapeHtml(vol)}</span>
+              <span>${escapeHtml(volLabel)} ${escapeHtml(vol)}</span>
               ${endStr ? `<span>${escapeHtml(endStr)}</span>` : ''}
             </div>
             ${isPinned ? '<button class="poly-del" title="Unpin">×</button>' : ''}

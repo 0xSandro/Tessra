@@ -33,4 +33,7 @@ import './advweather.js';
 import './counter.js';
 import './crypto.js';
 import './stocks.js';
+import './etfs.js';
+import './forex.js';
+import './commodities.js';
 import './polymarket.js';

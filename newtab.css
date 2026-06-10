@@ -20,16 +20,23 @@
 * { box-sizing: border-box; }
 
 /* ============== Glass / Liquid surfaces ===============
-   Body classes body.surface-glass and body.surface-liquid override the
-   widget / panel / popover backgrounds with translucent fills and
-   backdrop-filter blur. The user's saved widget colors (--widget-bg etc.)
-   are not touched — they reappear instantly when switching back to Flat. */
+   Body classes body.surface-glass / body.surface-liquid replace the widget,
+   panel, popover, button, and input backgrounds with translucent fills and
+   backdrop-filter blur. --glass-blur (px) and --glass-alpha (0..1) are
+   theme-controlled via the Theme tab. The user's saved widget colors
+   (--widget-bg etc.) are not touched — they reappear instantly when
+   switching back to Flat. */
+:root {
+  --glass-blur: 22px;
+  --glass-alpha: 0.55;
+}
+
 body.surface-glass .widget,
 body.surface-liquid .widget {
-  background: rgba(255, 255, 255, 0.55);
-  border-color: rgba(255, 255, 255, 0.45);
-  backdrop-filter: blur(22px) saturate(180%);
-  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  background: rgba(255, 255, 255, var(--glass-alpha));
+  border-color: rgba(255, 255, 255, calc(var(--glass-alpha) * 0.8));
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
   box-shadow:
     0 4px 16px rgba(0, 0, 0, 0.08),
     0 1px 0 rgba(255, 255, 255, 0.55) inset;
@@ -41,14 +48,15 @@ body.surface-liquid .widget:hover {
     0 1px 0 rgba(255, 255, 255, 0.65) inset;
 }
 
-/* Liquid: stronger blur, vertical gradient body for "light catching the top" */
+/* Liquid: vertical gradient body for "light catching the top" + slightly
+   stronger blur than Glass */
 body.surface-liquid .widget {
   background: linear-gradient(180deg,
-    rgba(255, 255, 255, 0.6) 0%,
-    rgba(255, 255, 255, 0.35) 100%);
-  backdrop-filter: blur(40px) saturate(200%);
-  -webkit-backdrop-filter: blur(40px) saturate(200%);
-  border-color: rgba(255, 255, 255, 0.55);
+    rgba(255, 255, 255, calc(var(--glass-alpha) + 0.05)) 0%,
+    rgba(255, 255, 255, calc(var(--glass-alpha) - 0.20)) 100%);
+  backdrop-filter: blur(calc(var(--glass-blur) + 18px)) saturate(200%);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) + 18px)) saturate(200%);
+  border-color: rgba(255, 255, 255, calc(var(--glass-alpha) + 0.05));
   box-shadow:
     0 4px 12px rgba(0, 0, 0, 0.04),
     0 16px 40px rgba(0, 0, 0, 0.10),
@@ -63,38 +71,38 @@ body.surface-liquid .widget:hover {
     0 -1px 0 rgba(0, 0, 0, 0.04) inset;
 }
 
-/* Side panel, edit button, popovers, drag ghost — same treatment */
+/* Side panel — slightly more opaque + more blur than widgets */
 body.surface-glass #side-panel,
 body.surface-liquid #side-panel {
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(30px) saturate(180%);
-  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  background: rgba(255, 255, 255, calc(var(--glass-alpha) + 0.2));
+  backdrop-filter: blur(calc(var(--glass-blur) + 8px)) saturate(180%);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) + 8px)) saturate(180%);
 }
 body.surface-glass #edit-toggle,
 body.surface-liquid #edit-toggle {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(22px) saturate(180%);
-  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  background: rgba(255, 255, 255, calc(var(--glass-alpha) + 0.15));
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
 }
 body.surface-glass #color-popover,
 body.surface-glass #settings-popover,
 body.surface-liquid #color-popover,
 body.surface-liquid #settings-popover {
-  background: rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  background: rgba(255, 255, 255, calc(var(--glass-alpha) + 0.3));
+  backdrop-filter: blur(calc(var(--glass-blur) + 6px)) saturate(180%);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) + 6px)) saturate(180%);
 }
 body.surface-glass #drag-ghost,
 body.surface-liquid #drag-ghost {
-  background: rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: rgba(255, 255, 255, calc(var(--glass-alpha) + 0.05));
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
 }
 
-/* Dark mode variants of glass / liquid */
+/* Dark mode variants */
 body.surface-glass.dark-mode .widget,
 body.surface-liquid.dark-mode .widget {
-  background: rgba(40, 40, 45, 0.55);
+  background: rgba(40, 40, 45, var(--glass-alpha));
   border-color: rgba(255, 255, 255, 0.08);
   box-shadow:
     0 4px 16px rgba(0, 0, 0, 0.3),
@@ -102,8 +110,8 @@ body.surface-liquid.dark-mode .widget {
 }
 body.surface-liquid.dark-mode .widget {
   background: linear-gradient(180deg,
-    rgba(60, 60, 65, 0.6) 0%,
-    rgba(40, 40, 45, 0.45) 100%);
+    rgba(60, 60, 65, calc(var(--glass-alpha) + 0.05)) 0%,
+    rgba(40, 40, 45, calc(var(--glass-alpha) - 0.15)) 100%);
   box-shadow:
     0 4px 12px rgba(0, 0, 0, 0.25),
     0 16px 40px rgba(0, 0, 0, 0.4),
@@ -111,13 +119,174 @@ body.surface-liquid.dark-mode .widget {
     0 -1px 0 rgba(0, 0, 0, 0.2) inset;
 }
 body.surface-glass.dark-mode #side-panel,
-body.surface-liquid.dark-mode #side-panel { background: rgba(30, 30, 35, 0.8); }
+body.surface-liquid.dark-mode #side-panel { background: rgba(30, 30, 35, calc(var(--glass-alpha) + 0.25)); }
 body.surface-glass.dark-mode #edit-toggle,
-body.surface-liquid.dark-mode #edit-toggle { background: rgba(30, 30, 35, 0.75); }
+body.surface-liquid.dark-mode #edit-toggle { background: rgba(30, 30, 35, calc(var(--glass-alpha) + 0.2)); }
 body.surface-glass.dark-mode #color-popover,
 body.surface-glass.dark-mode #settings-popover,
 body.surface-liquid.dark-mode #color-popover,
-body.surface-liquid.dark-mode #settings-popover { background: rgba(30, 30, 35, 0.88); }
+body.surface-liquid.dark-mode #settings-popover { background: rgba(30, 30, 35, calc(var(--glass-alpha) + 0.33)); }
+
+/* ---- Glass styling for interactables ---- */
+/* Inputs / selects / textareas inside widgets and the panel get a matching
+   translucent treatment so they don't look like opaque boxes glued onto glass. */
+body.surface-glass input[type="text"],
+body.surface-glass input[type="number"],
+body.surface-glass input[type="date"],
+body.surface-glass select,
+body.surface-glass textarea,
+body.surface-liquid input[type="text"],
+body.surface-liquid input[type="number"],
+body.surface-liquid input[type="date"],
+body.surface-liquid select,
+body.surface-liquid textarea {
+  background-color: rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(10px) saturate(150%);
+  -webkit-backdrop-filter: blur(10px) saturate(150%);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+body.surface-glass.dark-mode input[type="text"],
+body.surface-glass.dark-mode input[type="number"],
+body.surface-glass.dark-mode input[type="date"],
+body.surface-glass.dark-mode select,
+body.surface-glass.dark-mode textarea,
+body.surface-liquid.dark-mode input[type="text"],
+body.surface-liquid.dark-mode input[type="number"],
+body.surface-liquid.dark-mode input[type="date"],
+body.surface-liquid.dark-mode select,
+body.surface-liquid.dark-mode textarea {
+  background-color: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+/* Catalog cards and "+ add" dashed buttons */
+body.surface-glass .widget-card,
+body.surface-liquid .widget-card {
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+}
+body.surface-glass.dark-mode .widget-card,
+body.surface-liquid.dark-mode .widget-card { background: rgba(255, 255, 255, 0.06); }
+
+body.surface-glass .btn-subtle,
+body.surface-glass .upload-btn,
+body.surface-liquid .btn-subtle,
+body.surface-liquid .upload-btn {
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(10px) saturate(150%);
+  -webkit-backdrop-filter: blur(10px) saturate(150%);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+body.surface-glass.dark-mode .btn-subtle,
+body.surface-glass.dark-mode .upload-btn,
+body.surface-liquid.dark-mode .btn-subtle,
+body.surface-liquid.dark-mode .upload-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+/* Primary accent buttons keep their solid fill but get a glass-like inset
+   highlight so they feel native in the glass UI */
+body.surface-glass .pomo-toggle,
+body.surface-glass .timer-toggle,
+body.surface-glass .stopwatch-toggle,
+body.surface-glass .counter-inc,
+body.surface-glass .dice-roll,
+body.surface-glass .coin-flip,
+body.surface-glass .picker-pick,
+body.surface-glass .jsonfmt-format,
+body.surface-glass .clipboard-capture,
+body.surface-glass .snippets-save,
+body.surface-glass .goal-edit-save,
+body.surface-glass .habit-add-save,
+body.surface-liquid .pomo-toggle,
+body.surface-liquid .timer-toggle,
+body.surface-liquid .stopwatch-toggle,
+body.surface-liquid .counter-inc,
+body.surface-liquid .dice-roll,
+body.surface-liquid .coin-flip,
+body.surface-liquid .picker-pick,
+body.surface-liquid .jsonfmt-format,
+body.surface-liquid .clipboard-capture,
+body.surface-liquid .snippets-save,
+body.surface-liquid .goal-edit-save,
+body.surface-liquid .habit-add-save {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.05),
+    0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Outlined / secondary buttons get glass fill */
+body.surface-glass .pomo-reset,
+body.surface-glass .timer-reset,
+body.surface-glass .stopwatch-lap,
+body.surface-glass .stopwatch-reset,
+body.surface-glass .counter-dec,
+body.surface-glass .counter-reset,
+body.surface-glass .jsonfmt-btn,
+body.surface-glass .conv-swap,
+body.surface-glass .snippets-cancel,
+body.surface-glass .goal-edit-cancel,
+body.surface-glass .habit-add-cancel,
+body.surface-glass .goal-inc,
+body.surface-glass .goal-dec,
+body.surface-liquid .pomo-reset,
+body.surface-liquid .timer-reset,
+body.surface-liquid .stopwatch-lap,
+body.surface-liquid .stopwatch-reset,
+body.surface-liquid .counter-dec,
+body.surface-liquid .counter-reset,
+body.surface-liquid .jsonfmt-btn,
+body.surface-liquid .conv-swap,
+body.surface-liquid .snippets-cancel,
+body.surface-liquid .goal-edit-cancel,
+body.surface-liquid .habit-add-cancel,
+body.surface-liquid .goal-inc,
+body.surface-liquid .goal-dec {
+  background: rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(10px) saturate(150%);
+  -webkit-backdrop-filter: blur(10px) saturate(150%);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+body.surface-glass.dark-mode .pomo-reset,
+body.surface-glass.dark-mode .timer-reset,
+body.surface-glass.dark-mode .stopwatch-lap,
+body.surface-glass.dark-mode .stopwatch-reset,
+body.surface-glass.dark-mode .counter-dec,
+body.surface-glass.dark-mode .counter-reset,
+body.surface-glass.dark-mode .jsonfmt-btn,
+body.surface-glass.dark-mode .conv-swap,
+body.surface-glass.dark-mode .goal-inc,
+body.surface-glass.dark-mode .goal-dec,
+body.surface-liquid.dark-mode .pomo-reset,
+body.surface-liquid.dark-mode .timer-reset,
+body.surface-liquid.dark-mode .stopwatch-lap,
+body.surface-liquid.dark-mode .stopwatch-reset,
+body.surface-liquid.dark-mode .counter-dec,
+body.surface-liquid.dark-mode .counter-reset,
+body.surface-liquid.dark-mode .jsonfmt-btn,
+body.surface-liquid.dark-mode .conv-swap,
+body.surface-liquid.dark-mode .goal-inc,
+body.surface-liquid.dark-mode .goal-dec {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+/* Side panel inputs (catalog search, theme controls) */
+body.surface-glass .catalog-search,
+body.surface-liquid .catalog-search {
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+body.surface-glass.dark-mode .catalog-search,
+body.surface-liquid.dark-mode .catalog-search {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+}
 
 /* Micro-hint used under the surface seg-control */
 .panel-microhint {
@@ -1444,6 +1613,12 @@ body.dark-mode .poly-outcome.leading.poly-outcome-multi .poly-outcome-price { co
 }
 .stocks-change.positive { color: #16a34a; }
 .stocks-change.negative { color: #dc2626; }
+.commodities-unit {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 3px;
+}
 .stocks-del {
   position: absolute;
   top: 4px;
@@ -2625,6 +2800,7 @@ body.dark-mode .counter-reset:hover { background: rgba(255,255,255,0.06); }
   flex-direction: column;
   height: 100%;
   gap: 10px;
+  justify-content: center;
 }
 .stopwatch-display {
   font-size: 40px;
@@ -2673,12 +2849,13 @@ body.dark-mode .counter-reset:hover { background: rgba(255,255,255,0.06); }
   list-style: none;
   padding: 0;
   margin: 0;
-  flex: 1;
-  min-height: 0;
+  flex: 0 1 auto;
+  max-height: 50%;
   overflow-y: auto;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
 }
+.stopwatch-laps:empty { display: none; }
 .stopwatch-laps li {
   display: flex;
   align-items: baseline;
@@ -2785,6 +2962,14 @@ body.dark-mode .counter-reset:hover { background: rgba(255,255,255,0.06); }
   gap: 12px;
   padding: 4px 0;
   scrollbar-width: thin;
+}
+.aw-hourly-empty {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+  padding: 8px 0;
+  text-align: center;
+  opacity: 0.7;
 }
 .aw-hour {
   display: flex;
@@ -3444,17 +3629,21 @@ body.panel-left.edit-mode #edit-toggle { right: 16px; }
   width: 100%;
   border: 1px solid var(--panel-border);
   border-radius: 8px;
-  padding: 7px 12px;
+  padding: 10px 14px;
   font-size: 13px;
   outline: none;
   background: var(--panel-bg);
   color: var(--fg);
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   font-family: inherit;
   transition: border-color 0.15s;
 }
 .catalog-search:focus { border-color: var(--accent); }
 .catalog-section { display: flex; flex-direction: column; gap: 8px; }
+.catalog-section + .catalog-section {
+  padding-top: 14px;
+  border-top: 1px solid var(--panel-border);
+}
 .catalog-section-title {
   font-size: 11px;
   font-weight: 600;
