@@ -527,13 +527,109 @@ body.edit-mode .shortcut-del { display: block; }
   cursor: pointer; font-size: 22px; border-radius: 8px; padding: 6px; min-height: 60px;
 }
 
-/* Notes */
+/* Notes (tabbed) */
+.notes {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 8px;
+}
+.notes-tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid var(--widget-border);
+  padding-bottom: 4px;
+  flex-shrink: 0;
+}
+.notes-tabs-list {
+  display: flex;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+.notes-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 4px 3px 9px;
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+  transition: background 0.12s, color 0.12s;
+  flex-shrink: 0;
+  user-select: none;
+  max-width: 160px;
+}
+.notes-tab:hover { background: rgba(0,0,0,0.05); color: var(--fg); }
+.notes-tab.active {
+  background: var(--accent);
+  color: #fff;
+}
+.notes-tab.active:hover { background: var(--accent); }
+.notes-tab-title {
+  outline: none;
+  border-radius: 3px;
+  padding: 0 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 130px;
+}
+.notes-tab-title[contenteditable="true"] {
+  background: rgba(255,255,255,0.25);
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
+  min-width: 14px;
+}
+.notes-tab.active .notes-tab-title[contenteditable="true"] { background: rgba(255,255,255,0.35); }
+.notes-tab:not(.active) .notes-tab-title[contenteditable="true"] { background: rgba(0,0,0,0.08); }
+.notes-tab-del {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 3px;
+  opacity: 0.5;
+  transition: opacity 0.12s, background 0.12s;
+}
+.notes-tab:hover .notes-tab-del,
+.notes-tab.active .notes-tab-del { opacity: 1; }
+.notes-tab-del:hover { background: rgba(0,0,0,0.12); }
+.notes-tab.active .notes-tab-del:hover { background: rgba(255,255,255,0.25); }
+.notes-tab-add {
+  background: none;
+  border: 1px dashed var(--widget-border);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+  border-radius: 4px;
+  width: 26px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.notes-tab-add:hover { color: var(--fg); background: rgba(0,0,0,0.03); }
 .notes-textarea {
-  width: 100%; height: 100%;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
   border: none; outline: none; resize: none;
   font-family: inherit; font-size: 13px; color: var(--fg);
   background: transparent;
+  padding: 0;
 }
+body.dark-mode .notes-tab:hover { background: rgba(255,255,255,0.07); }
+body.dark-mode .notes-tab-del:hover { background: rgba(255,255,255,0.15); }
 
 /* Pomodoro */
 .pomo {
@@ -1085,6 +1181,543 @@ body.dark-mode .bstats-stat { background: rgba(255,255,255,0.04); }
 body.dark-mode .bstats-list li a:hover { background: rgba(255,255,255,0.06); }
 body.dark-mode .bstats-list-favicon { background-color: rgba(255,255,255,0.08); }
 
+/* Polymarket */
+.poly {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 8px;
+}
+.poly-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.poly-empty {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  padding: 24px 12px;
+  font-style: italic;
+}
+.poly-error { color: #c53030; }
+.poly-item {
+  position: relative;
+  padding: 10px 11px;
+  border: 1px solid var(--widget-border);
+  border-radius: 8px;
+  background: rgba(0,0,0,0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  transition: background 0.12s, border-color 0.12s;
+}
+.poly-item:hover {
+  background: rgba(0,0,0,0.04);
+  border-color: var(--widget-border);
+}
+.poly-question {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--fg);
+  text-decoration: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.35;
+  padding-right: 18px; /* room for the unpin × */
+}
+.poly-question:hover {
+  color: var(--accent);
+}
+.poly-bar {
+  height: 6px;
+  background: rgba(0,0,0,0.06);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.poly-bar.binary { background: rgba(220, 38, 38, 0.18); }
+.poly-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+.poly-bar.binary .poly-bar-fill { background: #16a34a; }
+.poly-outcomes {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.poly-outcome {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: rgba(0,0,0,0.04);
+  font-size: 11px;
+  color: var(--muted);
+}
+.poly-outcome-label { font-weight: 500; }
+.poly-outcome-price {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+.poly-outcome.leading.poly-outcome-yes {
+  background: rgba(22, 163, 74, 0.18);
+  color: #15803d;
+}
+.poly-outcome.leading.poly-outcome-yes .poly-outcome-price { color: #14532d; }
+.poly-outcome.leading.poly-outcome-no {
+  background: rgba(220, 38, 38, 0.18);
+  color: #b91c1c;
+}
+.poly-outcome.leading.poly-outcome-no .poly-outcome-price { color: #7f1d1d; }
+.poly-outcome.leading.poly-outcome-multi {
+  background: rgba(37, 99, 235, 0.18);
+  color: #1d4ed8;
+}
+.poly-outcome.leading.poly-outcome-multi .poly-outcome-price { color: #1e3a8a; }
+.poly-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 10px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.poly-del {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: transparent;
+  border: none;
+  width: 20px;
+  height: 20px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.12s, color 0.12s, background 0.12s;
+}
+.poly-item:hover .poly-del { opacity: 1; }
+.poly-del:hover { color: #c00; background: rgba(0,0,0,0.08); }
+.poly-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding-top: 4px;
+}
+.poly-add {
+  flex: 1;
+  background: none;
+  border: 1px dashed var(--widget-border);
+  color: var(--muted);
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: inherit;
+}
+.poly-add:hover { color: var(--fg); background: rgba(0,0,0,0.03); }
+.poly-updated {
+  font-size: 10px;
+  color: var(--muted);
+  font-style: italic;
+  flex-shrink: 0;
+  padding-right: 4px;
+}
+body.dark-mode .poly-item { background: rgba(255,255,255,0.04); }
+body.dark-mode .poly-item:hover { background: rgba(255,255,255,0.07); }
+body.dark-mode .poly-outcome { background: rgba(255,255,255,0.06); }
+body.dark-mode .poly-del:hover { background: rgba(255,255,255,0.12); }
+body.dark-mode .poly-outcome.leading.poly-outcome-yes { background: rgba(22,163,74,0.25); color: #4ade80; }
+body.dark-mode .poly-outcome.leading.poly-outcome-yes .poly-outcome-price { color: #86efac; }
+body.dark-mode .poly-outcome.leading.poly-outcome-no { background: rgba(220,38,38,0.25); color: #f87171; }
+body.dark-mode .poly-outcome.leading.poly-outcome-no .poly-outcome-price { color: #fca5a5; }
+body.dark-mode .poly-outcome.leading.poly-outcome-multi { background: rgba(99,102,241,0.25); color: #a5b4fc; }
+body.dark-mode .poly-outcome.leading.poly-outcome-multi .poly-outcome-price { color: #c7d2fe; }
+
+/* Stock Prices */
+.stocks {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 6px;
+}
+.stocks-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.stocks-empty {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  padding: 24px 12px;
+  font-style: italic;
+}
+.stocks-error { color: #c53030; }
+.stocks-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 4px;
+  border-bottom: 1px solid var(--widget-border);
+  transition: background 0.12s;
+  position: relative;
+}
+.stocks-item:last-child { border-bottom: none; }
+.stocks-item:hover { background: rgba(0,0,0,0.025); }
+.stocks-item-error { opacity: 0.7; }
+.stocks-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.stocks-symbol-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.stocks-symbol {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg);
+  letter-spacing: 0.3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.stocks-market {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--muted);
+  background: rgba(0,0,0,0.06);
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.stocks-market[data-state="PRE"],
+.stocks-market[data-state="PREPRE"] { background: rgba(245,158,11,0.18); color: #b45309; }
+.stocks-market[data-state="POST"],
+.stocks-market[data-state="POSTPOST"] { background: rgba(99,102,241,0.18); color: #4338ca; }
+.stocks-market[data-state="CLOSED"] { background: rgba(0,0,0,0.06); }
+.stocks-name {
+  font-size: 10px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stocks-name-error { color: #c53030; font-style: italic; }
+.stocks-stats {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex-shrink: 0;
+}
+.stocks-price {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+.stocks-change {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.stocks-change.positive { color: #16a34a; }
+.stocks-change.negative { color: #dc2626; }
+.stocks-del {
+  position: absolute;
+  top: 4px;
+  right: 2px;
+  background: transparent;
+  border: none;
+  width: 18px;
+  height: 18px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.12s, color 0.12s, background 0.12s;
+}
+.stocks-item:hover .stocks-del { opacity: 1; }
+.stocks-del:hover { color: #c00; background: rgba(0,0,0,0.06); }
+.stocks-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding-top: 4px;
+}
+.stocks-add {
+  flex: 1;
+  background: none;
+  border: 1px dashed var(--widget-border);
+  color: var(--muted);
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: inherit;
+}
+.stocks-add:hover { color: var(--fg); background: rgba(0,0,0,0.03); }
+.stocks-updated {
+  font-size: 10px;
+  color: var(--muted);
+  font-style: italic;
+  flex-shrink: 0;
+  padding-right: 4px;
+}
+body.dark-mode .stocks-item:hover { background: rgba(255,255,255,0.04); }
+body.dark-mode .stocks-del:hover { background: rgba(255,255,255,0.1); }
+body.dark-mode .stocks-market { background: rgba(255,255,255,0.08); }
+body.dark-mode .stocks-market[data-state="PRE"],
+body.dark-mode .stocks-market[data-state="PREPRE"] { color: #f59e0b; }
+body.dark-mode .stocks-market[data-state="POST"],
+body.dark-mode .stocks-market[data-state="POSTPOST"] { color: #a5b4fc; }
+
+/* Crypto Prices */
+.crypto {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 6px;
+}
+.crypto-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.crypto-empty {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  padding: 24px 12px;
+  font-style: italic;
+}
+.crypto-error { color: #c53030; }
+.crypto-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 4px;
+  border-bottom: 1px solid var(--widget-border);
+  transition: background 0.12s;
+  position: relative;
+}
+.crypto-item:last-child { border-bottom: none; }
+.crypto-item:hover { background: rgba(0,0,0,0.025); }
+.crypto-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: rgba(0,0,0,0.05);
+  object-fit: cover;
+}
+.crypto-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.crypto-symbol {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg);
+  letter-spacing: 0.2px;
+}
+.crypto-name {
+  font-size: 10px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.crypto-stats {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex-shrink: 0;
+}
+.crypto-price {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+.crypto-change {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.crypto-change.positive { color: #16a34a; }
+.crypto-change.negative { color: #dc2626; }
+.crypto-mcap {
+  font-size: 10px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.crypto-del {
+  position: absolute;
+  top: 4px;
+  right: 2px;
+  background: transparent;
+  border: none;
+  width: 18px;
+  height: 18px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.12s, color 0.12s, background 0.12s;
+}
+.crypto-item:hover .crypto-del { opacity: 1; }
+.crypto-del:hover { color: #c00; background: rgba(0,0,0,0.06); }
+.crypto-missing {
+  font-size: 10px;
+  color: var(--muted);
+  font-style: italic;
+  padding: 6px 4px;
+  border-top: 1px dashed var(--widget-border);
+}
+.crypto-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding-top: 4px;
+}
+.crypto-add {
+  flex: 1;
+  background: none;
+  border: 1px dashed var(--widget-border);
+  color: var(--muted);
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: inherit;
+}
+.crypto-add:hover { color: var(--fg); background: rgba(0,0,0,0.03); }
+.crypto-updated {
+  font-size: 10px;
+  color: var(--muted);
+  font-style: italic;
+  flex-shrink: 0;
+  padding-right: 4px;
+}
+body.dark-mode .crypto-icon { background: rgba(255,255,255,0.08); }
+body.dark-mode .crypto-item:hover { background: rgba(255,255,255,0.04); }
+body.dark-mode .crypto-del:hover { background: rgba(255,255,255,0.1); }
+
+/* Counter */
+.counter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 14px;
+}
+.counter-label {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+.counter-display {
+  font-size: 56px;
+  font-weight: 200;
+  letter-spacing: -2px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+.counter-controls {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.counter-inc, .counter-dec {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  font-weight: 300;
+  transition: transform 0.08s ease, opacity 0.12s, background 0.12s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+  font-family: inherit;
+}
+.counter-inc {
+  background: var(--accent);
+  color: #fff;
+}
+.counter-inc:hover { opacity: 0.9; }
+.counter-dec {
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--widget-border);
+}
+.counter-dec:hover { background: rgba(0,0,0,0.04); }
+.counter-inc:active, .counter-dec:active { transform: scale(0.92); }
+.counter-reset {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-family: inherit;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  transition: color 0.12s, background 0.12s;
+}
+.counter-reset:hover { color: var(--fg); background: rgba(0,0,0,0.04); }
+body.dark-mode .counter-dec:hover { background: rgba(255,255,255,0.06); }
+body.dark-mode .counter-reset:hover { background: rgba(255,255,255,0.06); }
+
 /* Habit Tracker */
 .habits {
   display: flex;
@@ -1159,9 +1792,8 @@ body.dark-mode .bstats-list-favicon { background-color: rgba(255,255,255,0.08); 
 }
 .habit-days.view-month {
   display: flex;
+  flex-wrap: wrap;
   gap: 2px;
-  overflow-x: auto;
-  padding-bottom: 2px;
 }
 .habit-day {
   border: 1px solid var(--widget-border);
@@ -2058,6 +2690,198 @@ body.dark-mode .bstats-list-favicon { background-color: rgba(255,255,255,0.08); 
 .lap-num  { flex: 0 0 56px; color: var(--muted); font-family: inherit; font-size: 11px; }
 .lap-time { flex: 1; }
 .lap-diff { color: var(--muted); }
+
+/* Advanced Weather widget */
+.widget[data-type="advweather"] > .widget-body { padding: 0; }
+
+.adv-weather {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  padding: 18px;
+  gap: 12px;
+  overflow-y: auto;
+  color: var(--fg);
+  transition: background 0.4s ease;
+}
+.aw-msg {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.aw-error { color: #c53030; }
+
+.aw-header { display: flex; align-items: center; justify-content: space-between; }
+.aw-location {
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0.9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aw-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 0;
+}
+.aw-icon {
+  font-size: 60px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.aw-hero-info { flex: 1; min-width: 0; text-align: right; }
+.aw-temp {
+  font-size: 52px;
+  font-weight: 200;
+  letter-spacing: -2px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.aw-condition {
+  font-size: 13px;
+  font-weight: 500;
+  margin-top: 2px;
+  opacity: 0.85;
+}
+
+.aw-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(128,128,128,0.25);
+  border-bottom: 1px solid rgba(128,128,128,0.25);
+}
+.aw-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  min-width: 0;
+}
+.aw-stat-icon { font-size: 14px; }
+.aw-stat-value {
+  font-weight: 600;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.aw-stat-label {
+  font-size: 9px;
+  opacity: 0.65;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.aw-hourly {
+  display: flex;
+  overflow-x: auto;
+  gap: 12px;
+  padding: 4px 0;
+  scrollbar-width: thin;
+}
+.aw-hour {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  flex-shrink: 0;
+  min-width: 36px;
+}
+.aw-hour-time { opacity: 0.75; font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
+.aw-hour-icon { font-size: 22px; line-height: 1; }
+.aw-hour-temp { font-weight: 600; font-variant-numeric: tabular-nums; font-size: 12px; }
+
+.aw-daily {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.aw-day {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 4px;
+  font-size: 12px;
+  border-radius: 4px;
+  transition: background 0.12s;
+}
+.aw-day:hover { background: rgba(255,255,255,0.08); }
+.aw-day-name { flex: 1; opacity: 0.95; }
+.aw-day-icon { font-size: 18px; }
+.aw-day-temps { font-variant-numeric: tabular-nums; opacity: 0.95; min-width: 64px; text-align: right; }
+
+.aw-suntimes {
+  display: flex;
+  justify-content: space-around;
+  gap: 16px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  padding-top: 4px;
+  border-top: 1px solid rgba(128,128,128,0.2);
+  opacity: 0.95;
+}
+
+/* Themed gradient backgrounds. Semi-transparent so glass/liquid surfaces still
+   blur the page background through them. */
+.adv-weather.themed[data-condition="clear-day"] {
+  background: linear-gradient(135deg, #38bdf8 0%, #0284c7 60%, #075985 100%);
+  color: #fff;
+}
+.adv-weather.themed[data-condition="clear-night"] {
+  background: linear-gradient(135deg, #1e3a8a 0%, #312e81 50%, #1e1b4b 100%);
+  color: #fff;
+}
+.adv-weather.themed[data-condition="partly-cloudy-day"] {
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 70%, #1d4ed8 100%);
+  color: #fff;
+}
+.adv-weather.themed[data-condition="partly-cloudy-night"] {
+  background: linear-gradient(135deg, #312e81 0%, #1e1b4b 100%);
+  color: #fff;
+}
+.adv-weather.themed[data-condition="cloudy"] {
+  background: linear-gradient(135deg, #94a3b8 0%, #64748b 50%, #475569 100%);
+  color: #fff;
+}
+.adv-weather.themed[data-condition="rain"] {
+  background: linear-gradient(135deg, #475569 0%, #334155 60%, #1f2937 100%);
+  color: #fff;
+}
+.adv-weather.themed[data-condition="drizzle"] {
+  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+  color: #fff;
+}
+.adv-weather.themed[data-condition="snow"] {
+  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #7dd3fc 100%);
+  color: #0f172a;
+}
+.adv-weather.themed[data-condition="storm"] {
+  background: linear-gradient(135deg, #1e1b4b 0%, #4c1d95 50%, #312e81 100%);
+  color: #fff;
+}
+.adv-weather.themed[data-condition="fog"] {
+  background: linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%);
+  color: #fff;
+}
+
+.adv-weather.themed .aw-stats {
+  border-color: rgba(255,255,255,0.22);
+}
+.adv-weather.themed[data-condition="snow"] .aw-stats,
+.adv-weather.themed[data-condition="snow"] .aw-suntimes {
+  border-color: rgba(15,23,42,0.18);
+}
+.adv-weather.themed .aw-suntimes { border-color: rgba(255,255,255,0.18); }
+.adv-weather.themed .aw-day:hover { background: rgba(255,255,255,0.12); }
+.adv-weather.themed[data-condition="snow"] .aw-day:hover { background: rgba(15,23,42,0.06); }
 
 /* Weather */
 .weather {

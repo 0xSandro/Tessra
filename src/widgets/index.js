@@ -29,3 +29,8 @@ import './jsonfmt.js';
 import './regex.js';
 import './bookmarks.js';
 import './recenttabs.js';
+import './advweather.js';
+import './counter.js';
+import './crypto.js';
+import './stocks.js';
+import './polymarket.js';

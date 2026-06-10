@@ -19,7 +19,11 @@
     "sessions",
     "topSites",
     "https://api.open-meteo.com/*",
-    "https://geocoding-api.open-meteo.com/*"
+    "https://geocoding-api.open-meteo.com/*",
+    "https://api.coingecko.com/*",
+    "https://query1.finance.yahoo.com/*",
+    "https://query2.finance.yahoo.com/*",
+    "https://gamma-api.polymarket.com/*"
   ],
   "browser_specific_settings": {
     "gecko": {

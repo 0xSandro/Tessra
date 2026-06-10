@@ -129,6 +129,35 @@ function migrate(s) {
       out.push(w);
     }
   }
+  // ---- Shape migrations for renamed/restructured widgets ----
+  // The Notes widget now stores { tabs, activeTabId } instead of { notes }.
+  // The standalone Tabs and Collapsible widgets were folded into Notes; convert
+  // both into the new tabbed-notes shape so existing instances keep their content.
+  out.forEach(w => {
+    // Old notes payload: { notes: 'string' }  →  { tabs: [{...}], activeTabId }
+    if (w.type === 'notes' && w.data && typeof w.data.notes === 'string' && !Array.isArray(w.data.tabs)) {
+      const tabId = id();
+      w.data = {
+        tabs: [{ id: tabId, title: 'Notes', content: w.data.notes }],
+        activeTabId: tabId
+      };
+    }
+    // Old standalone Tabs widget — same tab/content shape, just retype as notes
+    if (w.type === 'tabs' && w.data && Array.isArray(w.data.tabs)) {
+      w.type = 'notes';
+    }
+    // Old Collapsible widget — fold each section into a tab
+    if (w.type === 'sections' && w.data && Array.isArray(w.data.sections)) {
+      const tabs = w.data.sections.map(sec => ({
+        id: sec.id || id(),
+        title: sec.title || 'Section',
+        content: sec.content || ''
+      }));
+      w.type = 'notes';
+      w.data = { tabs, activeTabId: tabs[0]?.id || id() };
+    }
+  });
+
   // Defensively drop unknown widget types (e.g. uninstalled extensions in future)
   s.widgets = out.filter(w => registry.has(w.type));
   // Backfill settings on every widget; merge over defaults so new schema keys
@@ -213,6 +242,7 @@ function renderWidget(w) {
   const def = registry.get(w.type);
   const node = tpl.content.firstElementChild.cloneNode(true);
   node.dataset.id = w.id;
+  node.dataset.type = w.type;
   node.style.left   = w.x + 'px';
   node.style.top    = w.y + 'px';
   node.style.width  = w.w + 'px';
@@ -378,10 +408,11 @@ function enableResize(node, w) {
 }
 
 // ----- Catalog (grouped by category, with search) -----
-const CATEGORY_ORDER  = ['time', 'productivity', 'web', 'info', 'developer', 'random', 'other'];
+const CATEGORY_ORDER  = ['time', 'productivity', 'finance', 'web', 'info', 'developer', 'random', 'other'];
 const CATEGORY_LABELS = {
   time:         'Time',
   productivity: 'Productivity',
+  finance:      'Finance',
   web:          'Web',
   info:         'Info',
   developer:    'Developer',
