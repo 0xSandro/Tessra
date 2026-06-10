@@ -489,6 +489,29 @@ body.bg-image   {
 body.edit-mode .widget-header,
 body.always-headers .widget-header { display: flex; }
 body.edit-mode .widget { cursor: grab; }
+
+/* === Performance: pause expensive effects during drag/resize ===
+   backdrop-filter blur is the single biggest per-frame cost in glass/liquid
+   mode — the GPU re-samples and Gaussian-blurs everything behind each glass
+   surface on every frame, and we have many stacked surfaces. While the user
+   is actively moving something we strip all backdrop filters and promote
+   the moving node to its own compositor layer. The blur reappears the
+   instant the user lets go. Costs nothing perceptually because the brain
+   doesn't register fine blur detail on objects in motion anyway. */
+body.is-interacting,
+body.is-interacting *,
+body.is-interacting *::before,
+body.is-interacting *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.widget.dragging,
+.widget.resizing {
+  will-change: transform, width, height;
+}
+.drag-ghost {
+  will-change: transform, left, top;
+}
 /* When window-style headers are on (and we're not in edit mode), only the
    header acts as the drag handle. */
 body.always-headers:not(.edit-mode) .widget-header { cursor: grab; }
@@ -621,9 +644,85 @@ body.edit-mode .widget-resize:hover { opacity: 0.95; }
   user-select: none;
 }
 
-/* Clock */
-.clock-time { font-size: 48px; font-weight: 300; letter-spacing: -1px; line-height: 1; }
-.clock-date { margin-top: 8px; color: var(--muted); font-size: 14px; }
+/* Clock — shared face wrapper centers any watchface inside the widget body */
+.clock-face {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* Digital face */
+.clock-digital { gap: 6px; }
+.clock-time { font-size: 48px; font-weight: 300; letter-spacing: -1px; line-height: 1; font-variant-numeric: tabular-nums; }
+.clock-date { color: var(--muted); font-size: 14px; text-align: center; }
+
+/* Analog face */
+.clock-analog { padding: 6px; box-sizing: border-box; }
+.analog-wrap {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.analog-svg {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  /* keep the dial square no matter the widget aspect ratio */
+  aspect-ratio: 1 / 1;
+  max-width: 100%;
+}
+.analog-mark-major { stroke: var(--fg); stroke-width: 2;   stroke-linecap: round; }
+.analog-mark-minor { stroke: var(--fg); stroke-width: 1.2; stroke-linecap: round; opacity: 0.55; }
+.analog-hour   { stroke: var(--fg);     stroke-width: 3.2; stroke-linecap: round; }
+.analog-minute { stroke: var(--fg);     stroke-width: 2.2; stroke-linecap: round; }
+.analog-second { stroke: var(--accent); stroke-width: 1;   stroke-linecap: round; }
+.analog-center { fill:   var(--accent); }
+.analog-date   { font-size: 11px; flex-shrink: 0; }
+
+/* Flip face — split-flap aesthetic, no animation */
+.clock-flip { gap: 8px; padding: 4px; box-sizing: border-box; }
+.flip-row { display: flex; align-items: center; gap: 6px; }
+.flip-group { display: flex; gap: 3px; }
+.flip-digit {
+  position: relative;
+  background: linear-gradient(to bottom, #2a2a2e 0%, #2a2a2e 50%, #1d1d20 50%, #1d1d20 100%);
+  color: #f4f4f5;
+  font-weight: 700;
+  font-size: 42px;
+  line-height: 1;
+  padding: 8px 10px;
+  border-radius: 6px;
+  min-width: 0.85em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset, 0 2px 4px rgba(0,0,0,0.18);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+}
+/* The horizontal "fold line" that gives the split-flap look */
+.flip-digit::after {
+  content: '';
+  position: absolute;
+  left: 4px; right: 4px;
+  top: 50%;
+  height: 1px;
+  background: rgba(0,0,0,0.45);
+  pointer-events: none;
+}
+.flip-digit-small { font-size: 28px; padding: 5px 7px; border-radius: 4px; }
+.flip-sep { color: var(--fg); font-size: 32px; font-weight: 300; line-height: 1; opacity: 0.55; }
+.flip-meta { display: flex; gap: 10px; align-items: center; color: var(--muted); font-size: 12px; }
+.flip-ampm { font-weight: 600; letter-spacing: 0.6px; }
+.flip-ampm:empty { display: none; }
+body.dark-mode .flip-digit {
+  background: linear-gradient(to bottom, #3a3a3f 0%, #3a3a3f 50%, #2a2a2f 50%, #2a2a2f 100%);
+}
 
 /* Search */
 .search-form {
@@ -1478,10 +1577,15 @@ body.dark-mode .bstats-list-favicon { background-color: rgba(255,255,255,0.08); 
   justify-content: center;
   border-radius: 50%;
   opacity: 0;
-  transition: opacity 0.12s, color 0.12s, background 0.12s;
+  z-index: 2;
+  transition: opacity 0.12s, color 0.12s, background 0.12s, box-shadow 0.12s;
 }
-.poly-item:hover .poly-del { opacity: 1; }
-.poly-del:hover { color: #c00; background: rgba(0,0,0,0.08); }
+.poly-item:hover .poly-del {
+  opacity: 1;
+  background: var(--widget-bg);
+  box-shadow: 0 0 0 4px var(--widget-bg);
+}
+.poly-item:hover .poly-del:hover { color: #c00; background: rgba(0,0,0,0.1); }
 .poly-footer {
   display: flex;
   align-items: center;
@@ -1619,6 +1723,169 @@ body.dark-mode .poly-outcome.leading.poly-outcome-multi .poly-outcome-price { co
   color: var(--muted);
   margin-left: 3px;
 }
+
+/* Crypto chart (CoinGecko iframe) */
+.cgchart {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 6px;
+}
+.cgchart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.cgchart-coin {
+  font-weight: 600;
+  color: var(--fg);
+  text-transform: capitalize;
+}
+.cgchart-frame-wrap {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--widget-bg);
+}
+.cgchart-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+.cgchart-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+  padding: 16px;
+  text-align: center;
+}
+
+/* GitHub commit graph */
+.ghc {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 8px;
+}
+.ghc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.ghc-total {
+  font-size: 13px;
+  color: var(--fg);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ghc-user {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  flex-shrink: 0;
+}
+.ghc-grid-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+}
+.ghc-grid {
+  flex: 1;
+  display: grid;
+  grid-template-rows: repeat(7, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 3px;
+  min-width: 0;
+  min-height: 0;
+}
+.ghc-empty {
+  width: 100%;
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+  text-align: center;
+  align-self: center;
+  padding: 16px;
+}
+.ghc-error { color: #c53030; }
+.ghc-cell {
+  width: 100%;
+  height: 100%;
+  border-radius: 2px;
+  min-width: 0;
+  min-height: 0;
+  /* Defaults — GitHub green light theme. Overridden by color mode + dark mode. */
+  background: #ebedf0;
+}
+.ghc-cell-empty { background: transparent; }
+
+/* GitHub green palette (light mode) */
+.ghc-color-github .ghc-level-0 { background: #ebedf0; }
+.ghc-color-github .ghc-level-1 { background: #9be9a8; }
+.ghc-color-github .ghc-level-2 { background: #40c463; }
+.ghc-color-github .ghc-level-3 { background: #30a14e; }
+.ghc-color-github .ghc-level-4 { background: #216e39; }
+
+/* Accent palette — same accent at 0% / 25% / 50% / 75% / 100% intensity */
+.ghc-color-accent .ghc-level-0 { background: color-mix(in srgb, var(--fg) 8%, transparent); }
+.ghc-color-accent .ghc-level-1 { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+.ghc-color-accent .ghc-level-2 { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+.ghc-color-accent .ghc-level-3 { background: color-mix(in srgb, var(--accent) 80%, transparent); }
+.ghc-color-accent .ghc-level-4 { background: var(--accent); }
+
+.ghc-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--muted);
+}
+.ghc-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.ghc-legend .ghc-cell {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+}
+.ghc-legend-label {
+  margin: 0 4px;
+}
+.ghc-updated {
+  font-style: italic;
+  flex-shrink: 0;
+}
+
+/* Dark mode — GitHub's own dark calendar palette */
+body.dark-mode .ghc-color-github .ghc-level-0 { background: #161b22; }
+body.dark-mode .ghc-color-github .ghc-level-1 { background: #0e4429; }
+body.dark-mode .ghc-color-github .ghc-level-2 { background: #006d32; }
+body.dark-mode .ghc-color-github .ghc-level-3 { background: #26a641; }
+body.dark-mode .ghc-color-github .ghc-level-4 { background: #39d353; }
+body.dark-mode .ghc-color-accent .ghc-level-0 { background: color-mix(in srgb, var(--fg) 14%, transparent); }
 .stocks-del {
   position: absolute;
   top: 4px;
@@ -1637,10 +1904,15 @@ body.dark-mode .poly-outcome.leading.poly-outcome-multi .poly-outcome-price { co
   justify-content: center;
   border-radius: 50%;
   opacity: 0;
-  transition: opacity 0.12s, color 0.12s, background 0.12s;
+  z-index: 2;
+  transition: opacity 0.12s, color 0.12s, background 0.12s, box-shadow 0.12s;
 }
-.stocks-item:hover .stocks-del { opacity: 1; }
-.stocks-del:hover { color: #c00; background: rgba(0,0,0,0.06); }
+.stocks-item:hover .stocks-del {
+  opacity: 1;
+  background: var(--widget-bg);
+  box-shadow: 0 0 0 4px var(--widget-bg);
+}
+.stocks-item:hover .stocks-del:hover { color: #c00; background: rgba(0,0,0,0.08); }
 .stocks-footer {
   display: flex;
   align-items: center;
@@ -1777,10 +2049,15 @@ body.dark-mode .stocks-market[data-state="POSTPOST"] { color: #a5b4fc; }
   justify-content: center;
   border-radius: 50%;
   opacity: 0;
-  transition: opacity 0.12s, color 0.12s, background 0.12s;
+  z-index: 2;
+  transition: opacity 0.12s, color 0.12s, background 0.12s, box-shadow 0.12s;
 }
-.crypto-item:hover .crypto-del { opacity: 1; }
-.crypto-del:hover { color: #c00; background: rgba(0,0,0,0.06); }
+.crypto-item:hover .crypto-del {
+  opacity: 1;
+  background: var(--widget-bg);
+  box-shadow: 0 0 0 4px var(--widget-bg);
+}
+.crypto-item:hover .crypto-del:hover { color: #c00; background: rgba(0,0,0,0.08); }
 .crypto-missing {
   font-size: 10px;
   color: var(--muted);

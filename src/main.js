@@ -50,8 +50,8 @@ const defaultTheme = () => ({
   panelSide: 'right',     // 'right' | 'left'
   darkMode: false,        // dark UI variant
   surfaceStyle: 'liquid', // 'flat' | 'glass' | 'liquid'
-  glassBlur: 22,          // backdrop-filter blur in px (only used when glass/liquid)
-  glassAlpha: 55          // background opacity 10-90 (translated to 0.10-0.90 in CSS)
+  glassBlur: 9,           // backdrop-filter blur in px (only used when glass/liquid)
+  glassAlpha: 30          // background opacity 10-90 (translated to 0.10-0.90 in CSS)
 });
 
 function id() { return Math.random().toString(36).slice(2, 9); }
@@ -132,31 +132,40 @@ function migrate(s) {
     }
   }
   // ---- Shape migrations for renamed/restructured widgets ----
-  // The Notes widget now stores { tabs, activeTabId } instead of { notes }.
-  // The standalone Tabs and Collapsible widgets were folded into Notes; convert
-  // both into the new tabbed-notes shape so existing instances keep their content.
+  // Notes is now a single editable textarea — { content: 'string' }.
+  // Several legacy shapes (tabbed notes, old single-string notes, standalone
+  // Tabs widget, standalone Collapsible widget) all flatten into { content }
+  // so users coming from any prior version keep their text.
+  const flattenTabs = tabs => {
+    if (!Array.isArray(tabs) || !tabs.length) return '';
+    const filled = tabs.filter(t => (t?.content || '').trim().length);
+    if (filled.length <= 1) return filled[0]?.content || tabs[0]?.content || '';
+    return filled
+      .map(t => `== ${t.title || 'Untitled'} ==\n${t.content || ''}`)
+      .join('\n\n');
+  };
   out.forEach(w => {
-    // Old notes payload: { notes: 'string' }  →  { tabs: [{...}], activeTabId }
-    if (w.type === 'notes' && w.data && typeof w.data.notes === 'string' && !Array.isArray(w.data.tabs)) {
-      const tabId = id();
-      w.data = {
-        tabs: [{ id: tabId, title: 'Notes', content: w.data.notes }],
-        activeTabId: tabId
-      };
+    // Old tabbed notes payload → { content }
+    if (w.type === 'notes' && w.data && Array.isArray(w.data.tabs)) {
+      w.data = { content: flattenTabs(w.data.tabs) };
     }
-    // Old standalone Tabs widget — same tab/content shape, just retype as notes
+    // Older single-string notes payload → { content }
+    if (w.type === 'notes' && w.data && typeof w.data.notes === 'string' && typeof w.data.content !== 'string') {
+      w.data = { content: w.data.notes };
+    }
+    // Old standalone Tabs widget — flatten tabs and retype as notes
     if (w.type === 'tabs' && w.data && Array.isArray(w.data.tabs)) {
       w.type = 'notes';
+      w.data = { content: flattenTabs(w.data.tabs) };
     }
-    // Old Collapsible widget — fold each section into a tab
+    // Old Collapsible widget — flatten sections and retype as notes
     if (w.type === 'sections' && w.data && Array.isArray(w.data.sections)) {
       const tabs = w.data.sections.map(sec => ({
-        id: sec.id || id(),
         title: sec.title || 'Section',
         content: sec.content || ''
       }));
       w.type = 'notes';
-      w.data = { tabs, activeTabId: tabs[0]?.id || id() };
+      w.data = { content: flattenTabs(tabs) };
     }
   });
 
@@ -191,6 +200,24 @@ function bringToFront(w, node) {
   state.maxZ = (state.maxZ || 0) + 1;
   w.z = state.maxZ;
   if (node) node.style.zIndex = w.z;
+}
+
+// Reference-counted "user is currently dragging/resizing something" flag.
+// Glass/liquid mode pays a large per-frame cost for backdrop-filter blur;
+// while the user is interacting we strip those filters via CSS and add a
+// `will-change: transform` hint so Firefox composites moved widgets on
+// their own GPU layer. Count instead of boolean so overlapping interactions
+// (rare, but catalog-drag + something else) don't clear the flag early.
+let interactCount = 0;
+function setInteracting(on) {
+  if (on) {
+    if (interactCount++ === 0) document.body.classList.add('is-interacting');
+  } else {
+    if (--interactCount <= 0) {
+      interactCount = 0;
+      document.body.classList.remove('is-interacting');
+    }
+  }
 }
 
 // JSON-safe snapshot. Strips runtime fields (DOM refs, cleanup arrays, etc.)
@@ -353,6 +380,7 @@ function enableDrag(node, w) {
     ox = w.x; oy = w.y;
     node.classList.add('dragging');
     bringToFront(w, node);
+    setInteracting(true);
   };
   const move = (clientX, clientY) => {
     if (!dragging) return;
@@ -367,6 +395,7 @@ function enableDrag(node, w) {
     if (!dragging) return;
     dragging = false;
     node.classList.remove('dragging');
+    setInteracting(false);
     scheduleSave();
   };
   node.addEventListener('mousedown', e => { start(e.clientX, e.clientY, e.target); if (dragging) e.preventDefault(); });
@@ -392,6 +421,7 @@ function enableResize(node, w) {
     ow = w.w; oh = w.h;
     node.classList.add('resizing');
     bringToFront(w, node);
+    setInteracting(true);
   });
   window.addEventListener('mousemove', e => {
     if (!resizing) return;
@@ -405,6 +435,7 @@ function enableResize(node, w) {
     if (!resizing) return;
     resizing = false;
     node.classList.remove('resizing');
+    setInteracting(false);
     scheduleSave();
   });
 }
@@ -529,6 +560,7 @@ function startCatalogDrag(type, e) {
   ghost.textContent = def.title;
   ghost.classList.remove('hidden');
   document.body.style.userSelect = 'none';
+  setInteracting(true);
 }
 function moveGhost(e) {
   if (!dragType) return;
@@ -544,6 +576,7 @@ function dropGhost(e) {
   dragType = null;
   ghost.classList.add('hidden');
   document.body.style.userSelect = '';
+  setInteracting(false);
 
   const panelRect = panel.getBoundingClientRect();
   const insidePanel = e.clientX >= panelRect.left && e.clientX <= panelRect.right
@@ -1027,8 +1060,8 @@ function applyTheme() {
   document.body.classList.toggle('surface-glass',  t.surfaceStyle === 'glass');
   document.body.classList.toggle('surface-liquid', t.surfaceStyle === 'liquid');
   // Glass tuning vars (only meaningful when surfaceStyle is glass or liquid)
-  document.documentElement.style.setProperty('--glass-blur', (t.glassBlur ?? 22) + 'px');
-  document.documentElement.style.setProperty('--glass-alpha', ((t.glassAlpha ?? 55) / 100).toFixed(3));
+  document.documentElement.style.setProperty('--glass-blur', (t.glassBlur ?? 9) + 'px');
+  document.documentElement.style.setProperty('--glass-alpha', ((t.glassAlpha ?? 30) / 100).toFixed(3));
 }
 
 function bindTheme() {

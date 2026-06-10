@@ -37,3 +37,5 @@ import './etfs.js';
 import './forex.js';
 import './commodities.js';
 import './polymarket.js';
+import './github.js';
+import './cryptochart.js';
