@@ -106,7 +106,7 @@ function defaultState() {
     makeWidget('todo',  { x: 520, y: 180, z: 4 }),
     makeWidget('notes', { x: 860, y: 180, z: 5, title: 'Notes 1' })
   ];
-  return { maxZ: widgets.length, widgets, theme: defaultTheme() };
+  return { maxZ: widgets.length, widgets, theme: defaultTheme(), favorites: [], quickSpawn: ['stickies'] };
 }
 
 // ----- Migration -----
@@ -182,6 +182,20 @@ function migrate(s) {
     }
   });
   s.theme = Object.assign(defaultTheme(), s.theme || {});
+  // Favorites is a list of widget type IDs the user pinned to the top of
+  // the catalog. Filter out any types no longer in the registry so a removed
+  // widget doesn't leave a ghost in the favorites section.
+  s.favorites = Array.isArray(s.favorites)
+    ? s.favorites.filter(t => registry.has(t))
+    : [];
+  // Quick-access spawn list — types pinned to the round buttons under the
+  // Edit toggle. Default seed includes Sticky Note so the first thing the
+  // user sees after install has something useful in it. Unknown types are
+  // filtered out so removing a widget from the registry doesn't break the
+  // toolbar.
+  s.quickSpawn = Array.isArray(s.quickSpawn)
+    ? s.quickSpawn.filter(t => registry.has(t))
+    : (registry.has('stickies') ? ['stickies'] : []);
   // Normalize z-order on load: renumber widgets 1..N by their existing z
   // (preserves stacking order). Keeps maxZ small so it can never out-stack
   // chrome layers like the side panel or settings popover.
@@ -232,7 +246,9 @@ function serialize() {
       data:     w.data     ? JSON.parse(JSON.stringify(w.data))     : undefined,
       settings: w.settings ? JSON.parse(JSON.stringify(w.settings)) : undefined
     })),
-    theme: state.theme ? JSON.parse(JSON.stringify(state.theme)) : null
+    theme: state.theme ? JSON.parse(JSON.stringify(state.theme)) : null,
+    favorites:  Array.isArray(state.favorites)  ? state.favorites.slice()  : [],
+    quickSpawn: Array.isArray(state.quickSpawn) ? state.quickSpawn.slice() : []
   };
 }
 
@@ -369,10 +385,18 @@ function enableDrag(node, w) {
   const start = (clientX, clientY, target) => {
     const inEdit = document.body.classList.contains('edit-mode');
     const inWindowMode = document.body.classList.contains('always-headers');
+    // Sticky notes are always free-draggable from their grip strip, even
+    // outside edit mode. They have no window-style header; the grip is
+    // their dedicated drag handle.
+    const isSticky = w.type === 'stickies';
     if (!inEdit) {
-      // Outside edit mode, only allow drag from the header (window-style mode)
-      if (!inWindowMode) return;
-      if (!target.closest('.widget-header')) return;
+      if (isSticky) {
+        if (!target.closest('.sticky-grip')) return;
+      } else if (inWindowMode) {
+        if (!target.closest('.widget-header')) return;
+      } else {
+        return;
+      }
     }
     if (target.closest('button, input, textarea, a, select, .widget-resize, [contenteditable]')) return;
     dragging = true;
@@ -453,6 +477,53 @@ const CATEGORY_LABELS = {
   other:        'Other'
 };
 
+// Star icon used for the favorite toggle on each catalog card. One SVG with
+// a class that flips between filled (favorite) and outlined (not favorite).
+const STAR_SVG = '<svg viewBox="0 0 24 24" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26"/></svg>';
+
+function isFavorite(type) {
+  return Array.isArray(state.favorites) && state.favorites.includes(type);
+}
+
+function toggleFavorite(type) {
+  if (!Array.isArray(state.favorites)) state.favorites = [];
+  const i = state.favorites.indexOf(type);
+  if (i >= 0) state.favorites.splice(i, 1);
+  else state.favorites.push(type);
+  scheduleSave();
+  populateCatalog();
+  // Re-apply any active search filter so the user doesn't lose their state
+  const search = document.getElementById('catalog-search');
+  if (search && search.value) search.dispatchEvent(new Event('input'));
+}
+
+// Build a single catalog card. Used by both the Favorites section and the
+// category sections — same DOM, same drag behavior, same star toggle.
+function buildCard(def) {
+  const card = document.createElement('div');
+  card.className = 'widget-card' + (isFavorite(def.type) ? ' fav' : '');
+  card.dataset.type  = def.type;
+  card.dataset.label = (def.title || def.type).toLowerCase();
+  card.innerHTML = `
+    <button class="card-star ${isFavorite(def.type) ? 'on' : ''}" aria-label="Favorite" title="${isFavorite(def.type) ? 'Unfavorite' : 'Favorite'}">${STAR_SVG}</button>
+    <div class="card-icon">${def.icon || '◻'}</div>
+    <div class="card-label">${def.title}</div>`;
+  // Star click toggles favorite; stopPropagation so the card's drag handler
+  // doesn't pick it up.
+  const star = card.querySelector('.card-star');
+  star.addEventListener('mousedown', e => e.stopPropagation());
+  star.addEventListener('click', e => {
+    e.stopPropagation();
+    toggleFavorite(def.type);
+  });
+  card.addEventListener('mousedown', e => {
+    if (e.target.closest('.card-star')) return; // star handles its own click
+    e.preventDefault();
+    startCatalogDrag(def.type, e);
+  });
+  return card;
+}
+
 function populateCatalog() {
   const host = document.getElementById('widget-catalog');
   if (!host) return;
@@ -467,6 +538,25 @@ function populateCatalog() {
   // Render sections in fixed order; any unknown category goes under 'Other' at the end
   host.innerHTML = '';
   const seen = new Set();
+
+  // --- Favorites section pinned to the top ---
+  // Show only when at least one widget is favorited. Favorited widgets still
+  // appear in their original category section below — the favorites row is a
+  // shortcut, not a relocation.
+  const favs = Array.isArray(state.favorites) ? state.favorites : [];
+  const favDefs = favs.map(t => registry.get(t)).filter(Boolean);
+  if (favDefs.length) {
+    const section = document.createElement('div');
+    section.className = 'catalog-section catalog-favorites';
+    section.dataset.category = 'favorites';
+    section.innerHTML = '<h4 class="catalog-section-title">Favorites</h4>';
+    const grid = document.createElement('div');
+    grid.className = 'catalog-grid';
+    favDefs.forEach(def => grid.appendChild(buildCard(def)));
+    section.appendChild(grid);
+    host.appendChild(section);
+  }
+
   const renderSection = (cat) => {
     const defs = byCategory[cat];
     if (!defs || !defs.length) return;
@@ -476,17 +566,7 @@ function populateCatalog() {
     section.innerHTML = `<h4 class="catalog-section-title">${CATEGORY_LABELS[cat] || cat}</h4>`;
     const grid = document.createElement('div');
     grid.className = 'catalog-grid';
-    defs.forEach(def => {
-      const card = document.createElement('div');
-      card.className = 'widget-card';
-      card.dataset.type  = def.type;
-      card.dataset.label = (def.title || def.type).toLowerCase();
-      card.innerHTML = `
-        <div class="card-icon">${def.icon || '◻'}</div>
-        <div class="card-label">${def.title}</div>`;
-      card.addEventListener('mousedown', e => { e.preventDefault(); startCatalogDrag(def.type, e); });
-      grid.appendChild(card);
-    });
+    defs.forEach(def => grid.appendChild(buildCard(def)));
     section.appendChild(grid);
     host.appendChild(section);
     seen.add(cat);
@@ -1278,6 +1358,162 @@ function bindTheme() {
 }
 
 // ----- Boot -----
+// ----- Quick-access spawn toolbar -----
+// Vertical stack of round buttons under the Edit toggle. Each pinned widget
+// type gets a round icon button that spawns a new instance at viewport
+// center when clicked. The "+" button at the bottom opens a small picker
+// where users toggle which widgets they want pinned. Hidden in edit mode
+// because the side panel is the canonical place to add widgets there.
+
+// Spawn a new widget at viewport center with sensible defaults. Used by the
+// quick-access toolbar — adds the widget to state, renders it, persists.
+function spawnWidget(type) {
+  const def = registry.get(type);
+  if (!def) return;
+  const sz = def.defaultSize;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const x = Math.max(40, snap((vw - sz.w) / 2));
+  const y = Math.max(80, snap((vh - sz.h) / 2));
+  state.maxZ = (state.maxZ || 0) + 1;
+  const widget = makeWidget(type, { x, y, z: state.maxZ });
+  if (def.autoNumber) widget.title = nextAutoTitle(type);
+  state.widgets.push(widget);
+  renderWidget(widget);
+  scheduleSave();
+}
+
+function toggleQuickAccess(type) {
+  if (!Array.isArray(state.quickSpawn)) state.quickSpawn = [];
+  const i = state.quickSpawn.indexOf(type);
+  if (i >= 0) state.quickSpawn.splice(i, 1);
+  else state.quickSpawn.push(type);
+  renderQuickAccess();
+  renderQuickPicker(); // keep the picker grid in sync if open
+  scheduleSave();
+}
+
+function renderQuickAccess() {
+  const host = document.getElementById('quick-access');
+  if (!host) return;
+  const types = (state.quickSpawn || []).filter(t => registry.has(t));
+  let html = '';
+  types.forEach(t => {
+    const def = registry.get(t);
+    html += `<button class="qa-btn" data-type="${t}" title="Spawn ${def.title}">${def.icon || '◻'}</button>`;
+  });
+  html += '<button class="qa-btn qa-add" id="qa-add-btn" title="Add widget to quick access" aria-label="Add widget to quick access">+</button>';
+  host.innerHTML = html;
+  host.querySelectorAll('.qa-btn[data-type]').forEach(btn => {
+    btn.addEventListener('click', () => spawnWidget(btn.dataset.type));
+    // Right-click to quickly unpin without opening the picker
+    btn.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      toggleQuickAccess(btn.dataset.type);
+    });
+  });
+  const addBtn = document.getElementById('qa-add-btn');
+  if (addBtn) addBtn.addEventListener('click', toggleQuickPicker);
+}
+
+function renderQuickPicker() {
+  const host = document.getElementById('quick-picker');
+  if (!host) return;
+  const pinned = new Set(state.quickSpawn || []);
+  let html = '<div class="qp-title">Pin to quick access</div><div class="qp-grid">';
+  registry.all().forEach(def => {
+    const active = pinned.has(def.type);
+    html += `
+      <button class="qp-card ${active ? 'qp-active' : ''}" data-type="${def.type}" title="${active ? 'Remove from quick access' : 'Add to quick access'}">
+        <div class="qp-icon">${def.icon || '◻'}</div>
+        <div class="qp-label">${def.title}</div>
+      </button>`;
+  });
+  html += '</div>';
+  host.innerHTML = html;
+  host.querySelectorAll('.qp-card').forEach(card => {
+    card.addEventListener('click', () => toggleQuickAccess(card.dataset.type));
+  });
+}
+
+function toggleQuickPicker() {
+  const picker = document.getElementById('quick-picker');
+  if (!picker) return;
+  if (!picker.classList.contains('hidden')) {
+    picker.classList.add('hidden');
+    return;
+  }
+  renderQuickPicker();
+  picker.classList.remove('hidden');
+  // Position to the left of the add button so it doesn't go off-screen.
+  // Anchor by the add button's bottom-right corner.
+  const addBtn = document.getElementById('qa-add-btn');
+  if (addBtn) {
+    const rect = addBtn.getBoundingClientRect();
+    picker.style.top   = (rect.bottom + 8) + 'px';
+    picker.style.right = (window.innerWidth - rect.right) + 'px';
+  }
+  // Outside-click closer. Defer so the click that opened the picker doesn't
+  // immediately close it.
+  setTimeout(() => {
+    const close = e => {
+      if (picker.contains(e.target)) return;
+      if (e.target.id === 'qa-add-btn') return;
+      picker.classList.add('hidden');
+      document.removeEventListener('mousedown', close);
+    };
+    document.addEventListener('mousedown', close);
+  }, 0);
+}
+
+// ----- Page-level marquee (visual only — no actual selection) -----
+// Click-and-drag on empty page background draws the classic desktop rubber
+// band. `pointer-events: none` on the rect means it never blocks anything;
+// `setInteracting` pauses backdrop-filter blur during the drag for the same
+// frame-rate reasons as widget drag.
+function setupPageMarquee() {
+  const rect = document.createElement('div');
+  rect.id = 'page-marquee';
+  document.body.appendChild(rect);
+  // Ignore clicks that start on anything that isn't bare page.
+  const SKIP_SELECTOR = '.widget, #side-panel, #edit-toggle, #quick-access, #quick-picker, #color-popover, #settings-popover, .drag-ghost, .author-footer, button, input, textarea, a, select';
+  let dragging = false;
+  let originX = 0, originY = 0;
+
+  document.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    if (e.target.closest(SKIP_SELECTOR)) return;
+    originX = e.clientX; originY = e.clientY;
+    dragging = true;
+    rect.classList.add('active');
+    rect.style.left = originX + 'px';
+    rect.style.top  = originY + 'px';
+    rect.style.width = '0px';
+    rect.style.height = '0px';
+    // Suppress text selection that would normally accompany a drag on body
+    document.body.style.userSelect = 'none';
+    setInteracting(true);
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const x = Math.min(originX, e.clientX);
+    const y = Math.min(originY, e.clientY);
+    const w = Math.abs(e.clientX - originX);
+    const h = Math.abs(e.clientY - originY);
+    rect.style.left = x + 'px';
+    rect.style.top  = y + 'px';
+    rect.style.width  = w + 'px';
+    rect.style.height = h + 'px';
+  });
+  window.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    rect.classList.remove('active');
+    document.body.style.userSelect = '';
+    setInteracting(false);
+  });
+}
+
 (async function init() {
   let loaded = await store.get(STORAGE_KEY);
   if (!loaded) {
@@ -1292,5 +1528,7 @@ function bindTheme() {
   populateCatalog();
   state.widgets.forEach(renderWidget);
   bindTheme();
+  setupPageMarquee();
+  renderQuickAccess();
   scheduleSave();
 })();

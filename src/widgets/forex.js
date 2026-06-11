@@ -1,6 +1,6 @@
 import { register } from '../widget-registry.js';
 import { escapeHtml } from '../utils.js';
-import { fetchYahoo, formatAge, formatChangePct } from './_quotes.js';
+import { fetchYahoo, formatAge, formatChangePct, sparkDir, sparklineSvg } from './_quotes.js';
 
 // Forex pairs via Yahoo (=X suffix). Users type pairs as EURUSD or EUR/USD;
 // we normalize to EURUSD=X for the API and display them as EUR/USD.
@@ -50,12 +50,14 @@ register({
     pairs: 'EURUSD,GBPUSD,USDJPY,USDCHF',
     showChange: true,
     showName: false,
+    showSparkline: true,
     refreshInterval: 60
   }),
   settingsSchema: [
-    { key: 'pairs',      type: 'text',   label: 'Pairs', placeholder: 'EURUSD, USDJPY' },
-    { key: 'showChange', type: 'toggle', label: 'Show daily change' },
-    { key: 'showName',   type: 'toggle', label: 'Show full name' },
+    { key: 'pairs',         type: 'text',   label: 'Pairs', placeholder: 'EURUSD, USDJPY' },
+    { key: 'showChange',    type: 'toggle', label: 'Show daily change' },
+    { key: 'showName',      type: 'toggle', label: 'Show full name' },
+    { key: 'showSparkline', type: 'toggle', label: 'Show sparkline' },
     { key: 'refreshInterval', type: 'slider', label: 'Refresh', min: 30, max: 600, step: 30, unit: 's' }
   ],
 
@@ -122,6 +124,9 @@ register({
         }
         const changeStr = formatChangePct(q.changePct);
         const changeCls = q.change != null ? (q.change >= 0 ? 'positive' : 'negative') : '';
+        const sparkline = settings.showSparkline
+          ? `<div class="stocks-sparkline">${sparklineSvg(q.closes, sparkDir(q.change))}</div>`
+          : '';
         return `
           <div class="stocks-item" data-symbol="${escapeHtml(q.symbol)}">
             <div class="stocks-info">
@@ -130,6 +135,7 @@ register({
               </div>
               ${settings.showName ? `<div class="stocks-name">${escapeHtml(q.name)}</div>` : ''}
             </div>
+            ${sparkline}
             <div class="stocks-stats">
               <div class="stocks-price">${escapeHtml(formatRate(q.price))}</div>
               ${settings.showChange && changeStr ? `<div class="stocks-change ${changeCls}">${escapeHtml(changeStr)}</div>` : ''}

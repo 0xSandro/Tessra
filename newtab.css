@@ -159,6 +159,35 @@ body.surface-liquid.dark-mode textarea {
   border-color: rgba(255, 255, 255, 0.18);
 }
 
+/* Main-content textareas (notes, markdown scratchpad) shouldn't carry their
+   own opaque white panel in glass/liquid — they're the widget's primary
+   surface, so let the glass show through. The generic textarea rule above
+   matches them; override here. */
+body.surface-glass .notes-textarea,
+body.surface-glass .md-input,
+body.surface-liquid .notes-textarea,
+body.surface-liquid .md-input {
+  background-color: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-color: transparent;
+}
+
+/* Native checkboxes & radios — keep the browser rendering, just tint them
+   with the theme accent and add a tiny grow-on-hover. `accent-color` is the
+   modern way to recolor native controls without losing the OS look/feel and
+   without breaking accessibility. */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent);
+  cursor: pointer;
+  transition: transform 0.12s;
+}
+input[type="checkbox"]:hover,
+input[type="radio"]:hover {
+  transform: scale(1.15);
+}
+
 /* Catalog cards and "+ add" dashed buttons */
 body.surface-glass .widget-card,
 body.surface-liquid .widget-card {
@@ -173,17 +202,43 @@ body.surface-glass .btn-subtle,
 body.surface-glass .upload-btn,
 body.surface-liquid .btn-subtle,
 body.surface-liquid .upload-btn {
-  background: rgba(255, 255, 255, 0.4);
+  /* Higher fill + darker border so the button still reads against a
+     translucent white panel. Previously the 40 %-white-on-white was almost
+     invisible, especially when the button was disabled. */
+  background: rgba(255, 255, 255, 0.65);
   backdrop-filter: blur(10px) saturate(150%);
   -webkit-backdrop-filter: blur(10px) saturate(150%);
-  border-color: rgba(255, 255, 255, 0.5);
+  border-color: rgba(0, 0, 0, 0.14);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  color: var(--fg);
+}
+body.surface-glass .btn-subtle:hover:not(:disabled),
+body.surface-glass .upload-btn:hover:not(:disabled),
+body.surface-liquid .btn-subtle:hover:not(:disabled),
+body.surface-liquid .upload-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.85);
 }
 body.surface-glass.dark-mode .btn-subtle,
 body.surface-glass.dark-mode .upload-btn,
 body.surface-liquid.dark-mode .btn-subtle,
 body.surface-liquid.dark-mode .upload-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+body.surface-glass.dark-mode .btn-subtle:hover:not(:disabled),
+body.surface-glass.dark-mode .upload-btn:hover:not(:disabled),
+body.surface-liquid.dark-mode .btn-subtle:hover:not(:disabled),
+body.surface-liquid.dark-mode .upload-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.26);
+}
+/* Disabled state — dim the button but keep it visible. Without this the
+   browser's default disabled rendering plus the translucent glass surface
+   made disabled buttons effectively disappear. */
+.btn-subtle:disabled,
+.upload-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 /* Primary accent buttons keep their solid fill but get a glass-like inset
@@ -371,34 +426,43 @@ body.dark-mode .goal-edit-row input { background-color: rgba(255,255,255,0.04); 
 body.dark-mode .calc-btn.calc-fn { color: var(--fg); }
 
 /* Scrollbars in dark mode */
-body.dark-mode * { scrollbar-color: rgba(255,255,255,0.25) transparent; }
-body.dark-mode *::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); }
-body.dark-mode *::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.35); }
+body.dark-mode * { scrollbar-color: rgba(255,255,255,0.12) transparent; }
+body.dark-mode *:hover { scrollbar-color: rgba(255,255,255,0.28) transparent; }
+body.dark-mode *::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); }
+body.dark-mode *:hover::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.28); }
+body.dark-mode *::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.42); }
 
 /* Image upload "secondary" disabled hint stays subtle */
 body.dark-mode .upload-btn:disabled { color: var(--muted); }
 
 /* Sticky notes keep their light pastel cards (with dark text) regardless of mode */
 
-/* Minimal scrollbars (Firefox + WebKit) */
+/* Minimal scrollbars — Firefox uses `thin` (auto ~6px). WebKit gets a
+   custom 5px track with a translucent thumb that brightens on hover. The
+   2px transparent border on the thumb gives breathing room from content. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(0,0,0,0.2) transparent;
+  scrollbar-color: rgba(0,0,0,0.14) transparent;
+}
+*:hover {
+  scrollbar-color: rgba(0,0,0,0.28) transparent;
 }
 *::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 *::-webkit-scrollbar-track { background: transparent; }
 *::-webkit-scrollbar-thumb {
-  background: rgba(0,0,0,0.18);
-  border-radius: 4px;
-  border: 2px solid transparent;
+  background: rgba(0,0,0,0.14);
+  border-radius: 3px;
   background-clip: padding-box;
+  transition: background 0.15s;
+}
+*:hover::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.28);
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(0,0,0,0.35);
-  background-clip: padding-box;
+  background: rgba(0,0,0,0.42);
 }
 *::-webkit-scrollbar-corner { background: transparent; }
 
@@ -1717,6 +1781,42 @@ body.dark-mode .poly-outcome.leading.poly-outcome-multi .poly-outcome-price { co
 }
 .stocks-change.positive { color: #16a34a; }
 .stocks-change.negative { color: #dc2626; }
+
+/* 5-day trend sparkline sitting between info and stats */
+.stocks-sparkline {
+  flex-shrink: 0;
+  width: 68px;
+  height: 26px;
+  align-self: center;
+  margin: 0 6px;
+  opacity: 0.85;
+}
+.sparkline {
+  width: 100%;
+  height: 100%;
+  display: block;
+  --spark-color: var(--muted);
+}
+.sparkline-up   { --spark-color: #16a34a; }
+.sparkline-down { --spark-color: #dc2626; }
+.sparkline-flat { --spark-color: var(--muted); }
+body.dark-mode .sparkline-up   { --spark-color: #22c55e; }
+body.dark-mode .sparkline-down { --spark-color: #ef4444; }
+.sparkline-line {
+  fill: none;
+  stroke: var(--spark-color);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.sparkline-area {
+  fill: var(--spark-color);
+  fill-opacity: 0.14;
+  stroke: none;
+}
+.sparkline-empty { opacity: 0; }
+
 .commodities-unit {
   font-size: 10px;
   font-weight: 400;
@@ -1724,40 +1824,16 @@ body.dark-mode .poly-outcome.leading.poly-outcome-multi .poly-outcome-price { co
   margin-left: 3px;
 }
 
-/* Crypto chart (CoinGecko iframe) */
-.cgchart {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  gap: 6px;
-}
-.cgchart-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
-  flex-shrink: 0;
-  font-size: 11px;
-  color: var(--muted);
-}
-.cgchart-coin {
-  font-weight: 600;
-  color: var(--fg);
-  text-transform: capitalize;
-}
-.cgchart-frame-wrap {
-  flex: 1;
-  min-height: 0;
-  position: relative;
-  border-radius: 6px;
-  overflow: hidden;
-  background: var(--widget-bg);
-}
+/* Crypto chart — bare CoinGecko frame. Widget body padding zeroed via the
+   data-type rule below so the frame goes edge to edge of the widget body
+   (only the title bar in edit mode sits above it). */
+.widget[data-type="cryptochart"] > .widget-body { padding: 0; }
 .cgchart-frame {
   width: 100%;
   height: 100%;
-  border: none;
+  position: relative;
   display: block;
+  overflow: hidden;
 }
 .cgchart-empty {
   position: absolute;
@@ -3148,6 +3224,173 @@ body.dark-mode .counter-reset:hover { background: rgba(255,255,255,0.06); }
 /* Advanced Weather widget */
 .widget[data-type="advweather"] > .widget-body { padding: 0; }
 
+/* The sticky note IS the widget — no chrome around it. Hide the window
+   header entirely (the sticky has its own little × button). Strip the
+   widget's own background/border/shadow so it doesn't sit on a panel, and
+   give the body extra padding so the rotated sticky doesn't clip. */
+.widget[data-type="stickies"] > .widget-header { display: none !important; }
+.widget[data-type="stickies"] > .widget-body { padding: 12px; overflow: visible; }
+.widget[data-type="stickies"] {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  /* Widgets clip their own contents by default (overflow: hidden up on the
+     base .widget rule) so internal scroll views don't bleed past the card.
+     For stickies we want the rotated paper's drop-shadow to extend past
+     the widget's rectangular bounds — otherwise the shadow gets clipped
+     to a rectangle and looks like a halo around the whole widget instead
+     of a focused shadow beneath the tilted paper. */
+  overflow: visible;
+}
+body.surface-glass .widget[data-type="stickies"],
+body.surface-liquid .widget[data-type="stickies"] {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+/* Liquid mode: drop shadow on the sticky paper itself. Use filter:
+   drop-shadow rather than box-shadow so the shadow follows the actual
+   rotated rectangle shape — box-shadow renders a soft blur around the
+   element's bounding box, which on a tilted sticky looks like a rectangular
+   halo around the whole widget area instead of a focused shadow beneath
+   the tilted paper. */
+body.surface-liquid .sticky {
+  filter: drop-shadow(0 6px 10px rgba(0,0,0,0.18)) drop-shadow(0 2px 2px rgba(0,0,0,0.08));
+  box-shadow: none;
+}
+body.surface-liquid.dark-mode .sticky {
+  filter: drop-shadow(0 8px 12px rgba(0,0,0,0.45)) drop-shadow(0 2px 2px rgba(0,0,0,0.25));
+  box-shadow: none;
+}
+
+/* Single sticky note */
+.sticky {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--sticky-bg, #FFF59D);
+  background-image: linear-gradient(135deg,
+    rgba(255,255,255,0.30) 0%,
+    rgba(255,255,255,0)    35%,
+    rgba(0,0,0,0)          70%,
+    rgba(0,0,0,0.04)       100%);
+  border-radius: 2px 2px 10px 2px;
+  box-shadow: none;
+  padding: 24px 14px 16px;     /* top padding reserves grip strip */
+  color: #1c1c1c;
+  transform: rotate(-4.5deg);
+  transform-origin: 50% 50%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+/* Invisible grip strip across the top — picks up the widget drag handler */
+.sticky-grip {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 22px;
+  cursor: grab;
+  z-index: 1;
+}
+.sticky-grip:active { cursor: grabbing; }
+/* Top-right floating controls — fade in on hover so the note surface stays
+   uncluttered while reading */
+.sticky-actions {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  z-index: 3;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+.sticky:hover .sticky-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.sticky-color-btn {
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgba(255,255,255,0.6);
+  border-radius: 50%;
+  background: var(--sticky-edge, #F9A825);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.12s;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+.sticky-color-btn:hover { transform: scale(1.1); }
+.sticky-remove {
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: rgba(0,0,0,0.08);
+  color: rgba(0,0,0,0.6);
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  transition: background 0.12s, color 0.12s;
+}
+.sticky-remove:hover {
+  background: rgba(220,38,38,0.18);
+  color: #b91c1c;
+}
+.sticky-textarea {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: inherit;
+  font-family: 'Caveat', 'Marker Felt', 'Comic Sans MS', cursive, system-ui;
+  font-size: 17px;
+  line-height: 1.4;
+  padding: 0;
+  letter-spacing: 0.2px;
+}
+.sticky-textarea::placeholder {
+  color: rgba(0,0,0,0.35);
+  font-style: italic;
+}
+/* Folded bottom-right corner — uses a triangular gradient so it gets a
+   subtle shadow seam without an extra image asset */
+.sticky-curl {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 24px;
+  height: 24px;
+  background: linear-gradient(135deg,
+    transparent 49%,
+    rgba(0,0,0,0.06) 50%,
+    rgba(0,0,0,0.14) 100%);
+  border-bottom-right-radius: 10px;
+  pointer-events: none;
+}
+/* Glass/liquid: the broader textarea rule would slap a translucent panel on
+   top of the paper — opt out specifically for the sticky textarea. */
+body.surface-glass .sticky-textarea,
+body.surface-liquid .sticky-textarea {
+  background-color: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-color: transparent;
+}
+
 .adv-weather {
   display: flex;
   flex-direction: column;
@@ -3647,6 +3890,131 @@ body.dark-mode .counter-reset:hover { background: rgba(255,255,255,0.06); }
 }
 .picker-input:focus { border-bottom-color: var(--accent); }
 
+/* Lucky Wheel — reuses .picker-list / .picker-input / .picker-pick styles
+   for the entry editor + spin button so it inherits all glass treatments. */
+.wheel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+}
+.wheel-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wheel-svg {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: 1 / 1;
+  display: block;
+}
+.wheel-spinner {
+  /* Rotation origin = SVG viewBox center. `view-box` keeps the origin
+     anchored to (100, 100) in user space; without it (or with `fill-box`)
+     the group's bounding box drifts as it rotates, which is why the wheel
+     was wandering off-center mid-spin. */
+  transform-origin: 100px 100px;
+  transform-box: view-box;
+  will-change: transform;
+}
+.wheel-slice {
+  stroke: rgba(255,255,255,0.65);
+  stroke-width: 0.5;
+}
+.wheel-label {
+  font-size: 9px;
+  font-weight: 600;
+  fill: rgba(255,255,255,0.95);
+  font-family: inherit;
+  pointer-events: none;
+  paint-order: stroke;
+  stroke: rgba(0,0,0,0.25);
+  stroke-width: 0.4;
+}
+.wheel-rim {
+  fill: none;
+  stroke: rgba(0,0,0,0.18);
+  stroke-width: 1;
+}
+.wheel-hub {
+  fill: var(--widget-bg);
+  stroke: rgba(0,0,0,0.25);
+  stroke-width: 1;
+}
+/* Triangle pointer at 12 o'clock */
+.wheel-pointer {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+  border-top: 14px solid var(--fg);
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.25));
+  z-index: 2;
+  pointer-events: none;
+}
+.wheel-result {
+  text-align: center;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--fg);
+  min-height: 24px;
+  letter-spacing: -0.2px;
+}
+.wheel-result-empty { color: transparent; }
+@keyframes wheel-pulse {
+  0%   { transform: scale(0.85); opacity: 0.35; color: var(--accent); }
+  40%  { transform: scale(1.12); opacity: 1;    color: var(--accent); }
+  100% { transform: scale(1);    opacity: 1;    color: var(--fg); }
+}
+.wheel-result.wheel-flash { animation: wheel-pulse 0.5s ease-out; }
+.wheel-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 40%;
+  flex-shrink: 0;
+}
+.wheel-entries .picker-list { max-height: 100px; }
+body.dark-mode .wheel-rim { stroke: rgba(255,255,255,0.18); }
+
+/* Page-level marquee — classic desktop drag-to-select rectangle drawn on
+   bare page background. Visual only (pointer-events: none), so it never
+   blocks widget interaction. Lives above widgets so it renders on top,
+   below the side panel / edit toggle / popovers (10000+ z-index). */
+#page-marquee {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9000;
+  display: none;
+  background-color: color-mix(in srgb, var(--accent) 14%, transparent);
+  background-image:
+    linear-gradient(90deg, var(--accent) 50%, transparent 50%),
+    linear-gradient(90deg, var(--accent) 50%, transparent 50%),
+    linear-gradient(0deg,  var(--accent) 50%, transparent 50%),
+    linear-gradient(0deg,  var(--accent) 50%, transparent 50%);
+  background-position: 0 0, 0 100%, 0 0, 100% 0;
+  background-size: 6px 1px, 6px 1px, 1px 6px, 1px 6px;
+  background-repeat: repeat-x, repeat-x, repeat-y, repeat-y;
+  animation: marquee-ants 0.45s linear infinite;
+  will-change: width, height, left, top;
+}
+#page-marquee.active { display: block; }
+@keyframes marquee-ants {
+  to {
+    background-position: 6px 0, -6px 100%, 0 -6px, 100% 6px;
+  }
+}
+
 /* World Clock */
 .wc-list {
   list-style: none;
@@ -3777,6 +4145,155 @@ body.edit-mode #edit-toggle {
   right: 336px; /* sits just outside the open side panel */
 }
 body.edit-mode #edit-toggle svg { stroke: #fff; }
+
+/* Quick-access toolbar — round spawn buttons stacked under the Edit toggle.
+   Each pinned widget gets a 40 px round button. The (+) at the bottom opens
+   the picker. Hidden in edit mode (the side panel is the canonical place
+   to add widgets while editing). */
+#quick-access {
+  position: fixed;
+  top: 64px;             /* 16 + 40 + 8 — clear of the Edit button */
+  right: 16px;           /* right-aligned with the Edit button */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  z-index: 10000;
+  transition: opacity 0.2s, transform 0.2s;
+}
+body.edit-mode #quick-access {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-8px) scale(0.9);
+}
+.qa-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06);
+  color: var(--fg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+  transition: transform 0.1s, box-shadow 0.15s, background 0.1s, border-color 0.15s;
+}
+.qa-btn svg { width: 22px; height: 22px; display: block; }
+.qa-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08), 0 8px 20px rgba(0,0,0,0.1);
+}
+.qa-btn:active { transform: translateY(0); }
+.qa-btn.qa-add {
+  background: transparent;
+  border-style: dotted;
+  border-width: 1.5px;
+  color: var(--muted);
+  font-weight: 300;
+  font-size: 22px;
+  opacity: 0.5;
+  box-shadow: none;
+}
+.qa-btn.qa-add:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  opacity: 1;
+}
+body.dark-mode .qa-btn { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); }
+body.dark-mode .qa-btn:hover { background: rgba(255,255,255,0.1); }
+body.dark-mode .qa-btn.qa-add { background: transparent; }
+
+/* Glass / liquid: translucent backdrop-blur to match the Edit button language */
+body.surface-glass .qa-btn,
+body.surface-liquid .qa-btn {
+  background: rgba(255, 255, 255, calc(var(--glass-alpha) + 0.2));
+  backdrop-filter: blur(calc(var(--glass-blur) + 6px)) saturate(180%);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) + 6px)) saturate(180%);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+body.surface-glass.dark-mode .qa-btn,
+body.surface-liquid.dark-mode .qa-btn {
+  background: rgba(30, 30, 35, calc(var(--glass-alpha) + 0.2));
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Picker popover — appears beneath the (+) button. Grid of widget cards
+   with active state for already-pinned types. Click any card to toggle. */
+#quick-picker {
+  position: fixed;
+  z-index: 10002;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  width: 260px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+body.surface-glass #quick-picker,
+body.surface-liquid #quick-picker {
+  background: rgba(255, 255, 255, calc(var(--glass-alpha) + 0.3));
+  backdrop-filter: blur(calc(var(--glass-blur) + 6px)) saturate(180%);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) + 6px)) saturate(180%);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+body.surface-glass.dark-mode #quick-picker,
+body.surface-liquid.dark-mode #quick-picker {
+  background: rgba(30, 30, 35, calc(var(--glass-alpha) + 0.33));
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.qp-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+.qp-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.qp-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 4px;
+  border-radius: 8px;
+  cursor: pointer;
+  background: rgba(0,0,0,0.025);
+  border: 1px solid transparent;
+  color: var(--muted);
+  font-size: 10px;
+  font-family: inherit;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+  min-height: 60px;
+}
+.qp-card:hover { background: rgba(0,0,0,0.05); color: var(--fg); }
+.qp-icon { font-size: 18px; color: var(--fg); display: flex; align-items: center; justify-content: center; height: 24px; }
+.qp-icon svg { width: 22px; height: 22px; }
+.qp-label {
+  text-align: center;
+  font-weight: 500;
+  line-height: 1.2;
+}
+.qp-card.qp-active {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: var(--accent);
+  color: var(--fg);
+}
+.qp-card.qp-active .qp-icon { color: var(--accent); }
+body.dark-mode .qp-card { background: rgba(255,255,255,0.04); }
+body.dark-mode .qp-card:hover { background: rgba(255,255,255,0.08); }
 
 /* -------- Side panel -------- */
 #side-panel {
@@ -3944,6 +4461,7 @@ body.panel-left.edit-mode #edit-toggle { right: 16px; }
 }
 body.dark-mode .catalog-search { background: rgba(255,255,255,0.04); }
 .widget-card {
+  position: relative;
   background: rgba(0,0,0,0.02);
   border: 1px solid var(--panel-border);
   border-radius: 10px;
@@ -3960,6 +4478,47 @@ body.dark-mode .catalog-search { background: rgba(255,255,255,0.04); }
 .widget-card:active { cursor: grabbing; }
 .card-icon { font-size: 22px; color: var(--fg); }
 .card-label { font-size: 12px; color: var(--muted); }
+
+/* Favorite star — sits in the top-right corner of each catalog card. Empty
+   outline by default, filled accent when favorited. Always faintly visible
+   so the user knows it's there; pops to full opacity on card hover. */
+.card-star {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  padding: 2px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  opacity: 0.35;
+  transition: opacity 0.12s, color 0.12s, transform 0.12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+.card-star svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+}
+.widget-card:hover .card-star { opacity: 0.7; }
+.card-star:hover {
+  opacity: 1;
+  color: var(--accent);
+  transform: scale(1.15);
+}
+.card-star.on {
+  opacity: 1;
+  color: var(--accent);
+}
+.card-star.on svg { fill: var(--accent); }
+.widget-card.fav { border-color: color-mix(in srgb, var(--accent) 35%, var(--panel-border)); }
+body.dark-mode .card-star { color: var(--muted); }
 
 /* Presets pane */
 .presets-actions {

@@ -1,6 +1,6 @@
 import { register } from '../widget-registry.js';
 import { escapeHtml } from '../utils.js';
-import { fetchYahoo, formatAge, formatChangePct, MARKET_STATE_LABELS } from './_quotes.js';
+import { fetchYahoo, formatAge, formatChangePct, sparkDir, sparklineSvg, MARKET_STATE_LABELS } from './_quotes.js';
 
 // ETFs ride the same Yahoo pipeline as stocks but ship with broad-market
 // default holdings (SPY, QQQ, VTI, VOO, VEA). Functionally a sibling of
@@ -40,12 +40,14 @@ register({
     symbols: 'SPY,QQQ,VTI,VOO,VEA',
     showChange: true,
     showName: true,
+    showSparkline: true,
     refreshInterval: 60
   }),
   settingsSchema: [
-    { key: 'symbols',    type: 'text',   label: 'Tickers', placeholder: 'SPY, QQQ, VTI' },
-    { key: 'showChange', type: 'toggle', label: 'Show daily change' },
-    { key: 'showName',   type: 'toggle', label: 'Show fund name' },
+    { key: 'symbols',       type: 'text',   label: 'Tickers', placeholder: 'SPY, QQQ, VTI' },
+    { key: 'showChange',    type: 'toggle', label: 'Show daily change' },
+    { key: 'showName',      type: 'toggle', label: 'Show fund name' },
+    { key: 'showSparkline', type: 'toggle', label: 'Show sparkline' },
     { key: 'refreshInterval', type: 'slider', label: 'Refresh', min: 30, max: 600, step: 30, unit: 's' }
   ],
 
@@ -114,6 +116,9 @@ register({
         const changeStr = formatChangePct(q.changePct);
         const changeCls = q.change != null ? (q.change >= 0 ? 'positive' : 'negative') : '';
         const marketLabel = MARKET_STATE_LABELS[q.marketState];
+        const sparkline = settings.showSparkline
+          ? `<div class="stocks-sparkline">${sparklineSvg(q.closes, sparkDir(q.change))}</div>`
+          : '';
         return `
           <div class="stocks-item" data-symbol="${escapeHtml(q.symbol)}">
             <div class="stocks-info">
@@ -123,6 +128,7 @@ register({
               </div>
               ${settings.showName ? `<div class="stocks-name">${escapeHtml(q.name)}</div>` : ''}
             </div>
+            ${sparkline}
             <div class="stocks-stats">
               <div class="stocks-price">${escapeHtml(price)}</div>
               ${settings.showChange && changeStr ? `<div class="stocks-change ${changeCls}">${escapeHtml(changeStr)}</div>` : ''}

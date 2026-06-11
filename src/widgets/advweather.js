@@ -75,7 +75,7 @@ register({
     showHourly: true,
     showDetails: true,
     showSunTimes: true,
-    themedBackground: true
+    themedBackground: false
   }),
 
   settingsSchema: [
@@ -166,60 +166,68 @@ register({
       html += `</div>`;
 
       // Hourly strip (next ~12 hours).
-      // Open-Meteo returns naive local-timezone ISO strings ("2026-06-08T14:00")
-      // — we compare them as strings to avoid timezone-confusion bugs when the
-      // user's timezone differs from the location's.
+      // Strategy: parse each hourly time as a real Date (Open-Meteo returns
+      // naive local-tz ISO strings — `new Date(...)` interprets those in the
+      // viewer's local TZ, but for finding "the next 12 hours" relative to
+      // an upcoming wall-clock, naive-as-local actually does the right thing).
+      // Find the first hour that's still in the future or just started; from
+      // there take 12 entries. No string slicing — cleaner and harder to
+      // accidentally break across midnight/timezones.
       if (settings.showHourly) {
-        const hourly = data.weather.hourly;
-        const times  = hourly?.time;
-        const temps  = hourly?.temperature_2m;
-        const codes  = hourly?.weather_code;
+        const hourly = data.weather.hourly || {};
+        const times  = Array.isArray(hourly.time) ? hourly.time : [];
+        const temps  = Array.isArray(hourly.temperature_2m) ? hourly.temperature_2m : [];
+        const codes  = Array.isArray(hourly.weather_code)   ? hourly.weather_code   : [];
 
-        if (Array.isArray(times) && times.length > 0) {
-          const currentTime = cur.time || times[0];
-          const hourPrefix  = String(currentTime).slice(0, 13); // YYYY-MM-DDTHH
-          let startIdx = times.findIndex(t => typeof t === 'string' && t.slice(0, 13) === hourPrefix);
-          if (startIdx < 0) startIdx = times.findIndex(t => typeof t === 'string' && t >= currentTime);
+        if (!times.length) {
+          html += `<div class="aw-hourly-empty">Hourly forecast unavailable</div>`;
+          // eslint-disable-next-line no-console
+          console.warn('[advweather] hourly missing from payload', { hourlyKeys: Object.keys(hourly) });
+        } else {
+          // Match on Date object: the most recent hour whose start is <= now,
+          // or the first future hour if we're somehow ahead of the whole array.
+          const nowMs = Date.now();
+          let startIdx = -1;
+          for (let i = 0; i < times.length; i++) {
+            const t = times[i];
+            if (typeof t !== 'string') continue;
+            const ms = new Date(t).getTime();
+            if (isNaN(ms)) continue;
+            // Hour is "current" if now is within [hour, hour + 1h)
+            if (ms <= nowMs && nowMs < ms + 3600000) { startIdx = i; break; }
+          }
+          // Fall back to first future hour, then to 0
+          if (startIdx < 0) {
+            startIdx = times.findIndex(t => {
+              if (typeof t !== 'string') return false;
+              const ms = new Date(t).getTime();
+              return !isNaN(ms) && ms >= nowMs;
+            });
+          }
           if (startIdx < 0) startIdx = 0;
 
           const slice = Math.min(12, times.length - startIdx);
-          if (slice > 0) {
-            html += `<div class="aw-hourly">`;
-            for (let i = 0; i < slice; i++) {
-              const idx = startIdx + i;
-              const timeStr = times[idx];
-              if (!timeStr) continue;
-              let label;
-              if (i === 0) {
-                label = 'Now';
-              } else {
-                const parsed = new Date(timeStr);
-                label = isNaN(parsed.getTime()) ? timeStr.slice(11, 16) : formatHour(parsed);
-              }
-              const code   = Array.isArray(codes) ? codes[idx] : undefined;
-              const info   = weatherInfo[code] || { emoji: '·' };
-              const temp   = Array.isArray(temps) ? temps[idx] : null;
-              const tempStr = (temp == null || isNaN(temp)) ? '—' : Math.round(temp) + '°';
-              html += `
-                <div class="aw-hour">
-                  <div class="aw-hour-time">${escapeHtml(label)}</div>
-                  <div class="aw-hour-icon">${info.emoji}</div>
-                  <div class="aw-hour-temp">${tempStr}</div>
-                </div>`;
-            }
-            html += `</div>`;
-          } else {
-            html += `<div class="aw-hourly-empty">Hourly forecast unavailable</div>`;
+          html += `<div class="aw-hourly">`;
+          for (let i = 0; i < slice; i++) {
+            const idx = startIdx + i;
+            const timeStr = times[idx];
+            if (!timeStr) continue;
+            const parsed = new Date(timeStr);
+            const label = i === 0
+              ? 'Now'
+              : (isNaN(parsed.getTime()) ? String(timeStr).slice(11, 16) : formatHour(parsed));
+            const hCode  = codes[idx];
+            const hInfo  = weatherInfo[hCode] || { emoji: '·' };
+            const hTemp  = temps[idx];
+            const tempStr = (hTemp == null || isNaN(hTemp)) ? '—' : Math.round(hTemp) + '°';
+            html += `
+              <div class="aw-hour">
+                <div class="aw-hour-time">${escapeHtml(label)}</div>
+                <div class="aw-hour-icon">${hInfo.emoji}</div>
+                <div class="aw-hour-temp">${tempStr}</div>
+              </div>`;
           }
-        } else {
-          // Surface this loudly so it's obvious the data is missing rather
-          // than the section being silently skipped.
-          html += `<div class="aw-hourly-empty">Hourly forecast unavailable</div>`;
-          console.warn('[advweather] hourly missing from payload', {
-            hasHourly: !!hourly,
-            keys: hourly ? Object.keys(hourly) : null,
-            timesType: typeof times
-          });
+          html += `</div>`;
         }
       }
 

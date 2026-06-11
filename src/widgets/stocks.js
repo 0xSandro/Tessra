@@ -1,19 +1,11 @@
 import { register } from '../widget-registry.js';
 import { escapeHtml } from '../utils.js';
+import { fetchYahoo, formatAge, formatChangePct, sparkDir, sparklineSvg, MARKET_STATE_LABELS } from './_quotes.js';
 
-// Yahoo Finance's v8 chart endpoint. Unofficial but widely used; returns
-// enough metadata to compute current price + change without an API key.
-// We fetch one symbol per request and parallelize. Results are cached on
-// data.quotes between renders so opening multiple tabs doesn't re-fetch
-// until the data is stale.
-
-const MARKET_STATE_LABELS = {
-  PRE: 'Pre',
-  POST: 'After',
-  POSTPOST: 'After',
-  PREPRE: 'Pre',
-  CLOSED: 'Closed'
-};
+// Stocks via Yahoo Finance v8 chart endpoint. One fetch per symbol,
+// parallelized in caller. Quotes cache between renders so opening multiple
+// tabs doesn't re-fetch until stale. Each row gets a 5-day trend sparkline
+// next to the price — the same fetch returns the close series we need.
 
 function formatPrice(price, currency) {
   if (price == null || isNaN(price)) return '—';
@@ -33,58 +25,13 @@ function formatPrice(price, currency) {
   }
 }
 
-function formatChange(change, pct) {
-  if (change == null || isNaN(change)) return '';
-  const sign = change >= 0 ? '+' : '';
-  const pctStr = (pct != null && !isNaN(pct)) ? `${sign}${pct.toFixed(2)}%` : '';
-  return pctStr;
-}
-
-function formatAge(ms) {
-  if (!ms) return '';
-  const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
-  if (s < 60)   return `Updated ${s}s ago`;
-  if (s < 3600) return `Updated ${Math.round(s / 60)}m ago`;
-  return `Updated ${Math.round(s / 3600)}h ago`;
-}
-
-async function fetchOneSymbol(symbol) {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const j = await res.json();
-  if (j.chart?.error) throw new Error(j.chart.error.description || 'Yahoo error');
-  const r = j.chart?.result?.[0];
-  if (!r || !r.meta) throw new Error('No data');
-  const m = r.meta;
-  const price = m.regularMarketPrice;
-  const prev  = m.chartPreviousClose ?? m.previousClose;
-  let change = null, changePct = null;
-  if (price != null && prev != null) {
-    change = price - prev;
-    changePct = prev !== 0 ? (change / prev) * 100 : 0;
-  }
-  return {
-    ok: true,
-    symbol: m.symbol || symbol,
-    name: m.longName || m.shortName || m.symbol || symbol,
-    exchange: m.fullExchangeName || m.exchangeName || '',
-    currency: m.currency || 'USD',
-    price,
-    prev,
-    change,
-    changePct,
-    marketState: m.marketState || 'CLOSED'
-  };
-}
-
 register({
   type: 'stocks',
   title: 'Stock Prices',
   icon: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>',
   category: 'finance',
-  defaultSize: { w: 320, h: 320 },
-  minSize:     { w: 240, h: 200 },
+  defaultSize: { w: 360, h: 320 },
+  minSize:     { w: 280, h: 200 },
 
   defaultData: () => ({
     quotes: null,
@@ -97,12 +44,14 @@ register({
     symbols: 'AAPL,MSFT,GOOGL,NVDA',
     showChange: true,
     showName: true,
+    showSparkline: true,
     refreshInterval: 60
   }),
   settingsSchema: [
-    { key: 'symbols',    type: 'text',   label: 'Symbols', placeholder: 'AAPL, MSFT, GOOGL' },
-    { key: 'showChange', type: 'toggle', label: 'Show daily change' },
-    { key: 'showName',   type: 'toggle', label: 'Show company name' },
+    { key: 'symbols',       type: 'text',   label: 'Symbols', placeholder: 'AAPL, MSFT, GOOGL' },
+    { key: 'showChange',    type: 'toggle', label: 'Show daily change' },
+    { key: 'showName',      type: 'toggle', label: 'Show company name' },
+    { key: 'showSparkline', type: 'toggle', label: 'Show sparkline' },
     { key: 'refreshInterval', type: 'slider', label: 'Refresh', min: 30, max: 600, step: 30, unit: 's' }
   ],
 
@@ -169,9 +118,12 @@ register({
             </div>`;
         }
         const price = formatPrice(q.price, q.currency);
-        const changeStr = formatChange(q.change, q.changePct);
+        const changeStr = formatChangePct(q.changePct);
         const changeCls = q.change != null ? (q.change >= 0 ? 'positive' : 'negative') : '';
         const marketLabel = MARKET_STATE_LABELS[q.marketState];
+        const sparkline = settings.showSparkline
+          ? `<div class="stocks-sparkline">${sparklineSvg(q.closes, sparkDir(q.change))}</div>`
+          : '';
         return `
           <div class="stocks-item" data-symbol="${escapeHtml(q.symbol)}">
             <div class="stocks-info">
@@ -181,6 +133,7 @@ register({
               </div>
               ${settings.showName ? `<div class="stocks-name">${escapeHtml(q.name)}</div>` : ''}
             </div>
+            ${sparkline}
             <div class="stocks-stats">
               <div class="stocks-price">${escapeHtml(price)}</div>
               ${settings.showChange && changeStr ? `<div class="stocks-change ${changeCls}">${escapeHtml(changeStr)}</div>` : ''}
@@ -215,7 +168,7 @@ register({
       if (!data.quotes) paint(); // initial loading state
       try {
         const results = await Promise.all(syms.map(s =>
-          fetchOneSymbol(s).catch(err => ({ ok: false, symbol: s, error: err.message }))
+          fetchYahoo(s).catch(err => ({ ok: false, symbol: s, error: err.message }))
         ));
         if (cancelled) return;
         data.quotes    = results;

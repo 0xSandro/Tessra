@@ -1,6 +1,6 @@
 import { register } from '../widget-registry.js';
 import { escapeHtml } from '../utils.js';
-import { fetchYahoo, formatAge, formatChangePct, MARKET_STATE_LABELS } from './_quotes.js';
+import { fetchYahoo, formatAge, formatChangePct, sparkDir, sparklineSvg, MARKET_STATE_LABELS } from './_quotes.js';
 
 // Commodities via Yahoo futures tickers (=F suffix). Defaults are continuous
 // front-month contracts: gold (GC), silver (SI), WTI crude (CL), nat gas (NG).
@@ -87,12 +87,14 @@ register({
     symbols: 'GC=F,SI=F,CL=F,NG=F',
     showChange: true,
     showUnit: true,
+    showSparkline: true,
     refreshInterval: 120
   }),
   settingsSchema: [
-    { key: 'symbols',    type: 'text',   label: 'Tickers', placeholder: 'GC=F, CL=F, gold, oil' },
-    { key: 'showChange', type: 'toggle', label: 'Show daily change' },
-    { key: 'showUnit',   type: 'toggle', label: 'Show unit (/oz, /bbl…)' },
+    { key: 'symbols',       type: 'text',   label: 'Tickers', placeholder: 'GC=F, CL=F, gold, oil' },
+    { key: 'showChange',    type: 'toggle', label: 'Show daily change' },
+    { key: 'showUnit',      type: 'toggle', label: 'Show unit (/oz, /bbl…)' },
+    { key: 'showSparkline', type: 'toggle', label: 'Show sparkline' },
     { key: 'refreshInterval', type: 'slider', label: 'Refresh', min: 60, max: 600, step: 30, unit: 's' }
   ],
 
@@ -163,6 +165,9 @@ register({
         const changeStr = formatChangePct(q.changePct);
         const changeCls = q.change != null ? (q.change >= 0 ? 'positive' : 'negative') : '';
         const marketLabel = MARKET_STATE_LABELS[q.marketState];
+        const sparkline = settings.showSparkline
+          ? `<div class="stocks-sparkline">${sparklineSvg(q.closes, sparkDir(q.change))}</div>`
+          : '';
         return `
           <div class="stocks-item" data-symbol="${escapeHtml(q.symbol)}">
             <div class="stocks-info">
@@ -172,6 +177,7 @@ register({
               </div>
               <div class="stocks-name">${escapeHtml(q.symbol)}</div>
             </div>
+            ${sparkline}
             <div class="stocks-stats">
               <div class="stocks-price">${priceStr}</div>
               ${settings.showChange && changeStr ? `<div class="stocks-change ${changeCls}">${escapeHtml(changeStr)}</div>` : ''}

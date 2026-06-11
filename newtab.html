@@ -14,6 +14,8 @@
     </svg>
     <span class="edit-label">Edit</span>
   </button>
+  <div id="quick-access" aria-label="Quick spawn"></div>
+  <div id="quick-picker" class="hidden" role="dialog" aria-label="Pin widget to quick access"></div>
 
   <aside id="side-panel" aria-hidden="true">
     <div class="panel-header">
@@ -29,9 +31,10 @@
       </span>
       <div class="panel-header-actions">
         <button id="panel-flip" title="Move panel to other side" aria-label="Flip panel side">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polyline points="9 18 3 12 9 6"/>
-            <polyline points="15 6 21 12 15 18"/>
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="15" y="4" width="6" height="16" rx="1.5"/>
+            <line x1="4" y1="12" x2="11.5" y2="12"/>
+            <polyline points="7.5 8.5 4 12 7.5 15.5"/>
           </svg>
         </button>
         <button id="panel-close" title="Close">×</button>

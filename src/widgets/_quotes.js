@@ -42,6 +42,9 @@ export async function fetchYahoo(symbol) {
     change = price - prev;
     changePct = prev !== 0 ? (change / prev) * 100 : 0;
   }
+  // Daily closes for the 5-day window — feeds the row sparklines. Yahoo
+  // returns nulls for non-trading days; strip them so the path stays smooth.
+  const closes = (r.indicators?.quote?.[0]?.close || []).filter(c => c != null && !isNaN(c));
   return {
     ok: true,
     symbol: m.symbol || symbol,
@@ -52,6 +55,43 @@ export async function fetchYahoo(symbol) {
     prev,
     change,
     changePct,
+    closes,
     marketState: m.marketState || 'CLOSED'
   };
+}
+
+// Tiny SVG sparkline. Returns an HTML string ready to drop into innerHTML.
+// `closes` is an array of numbers; `dir` is 'up' | 'down' | 'flat' and drives
+// the CSS color via a class. Output viewBox is fixed at 80×24 with
+// preserveAspectRatio="none" so the SVG stretches cleanly when CSS sizes the
+// container differently — line stroke uses non-scaling-stroke to stay crisp.
+export function sparklineSvg(closes, dir) {
+  if (!Array.isArray(closes) || closes.length < 2) {
+    return '<svg class="sparkline sparkline-empty" viewBox="0 0 80 24"></svg>';
+  }
+  const W = 80, H = 24, PAD = 2;
+  const min = Math.min(...closes);
+  const max = Math.max(...closes);
+  const range = (max - min) || 1;
+  const innerH = H - PAD * 2;
+  let line = '';
+  closes.forEach((c, i) => {
+    const x = (i / (closes.length - 1)) * W;
+    const y = PAD + innerH - ((c - min) / range) * innerH;
+    line += (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1);
+  });
+  const area = line + ` L${W},${H} L0,${H} Z`;
+  const cls = 'sparkline sparkline-' + (dir === 'down' ? 'down' : dir === 'flat' ? 'flat' : 'up');
+  return `<svg class="${cls}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <path class="sparkline-area" d="${area}"/>
+    <path class="sparkline-line" d="${line}"/>
+  </svg>`;
+}
+
+// Convenience: derive sparkline direction from change sign.
+export function sparkDir(change) {
+  if (change == null || isNaN(change)) return 'flat';
+  if (change > 0) return 'up';
+  if (change < 0) return 'down';
+  return 'flat';
 }

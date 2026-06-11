@@ -15,12 +15,12 @@ register({
   title: 'Search',
   icon: '⌕',
   category: 'web',
-  defaultSize: { w: 460, h: 80 },
-  minSize:     { w: 240, h: 60 },
+  defaultSize: { w: 480, h: 110 },
+  minSize:     { w: 240, h: 80 },
   defaultData: () => ({}),
 
   defaultSettings: () => ({
-    engine: 'duckduckgo'
+    engine: 'google'
   }),
   settingsSchema: [
     { key: 'engine', type: 'select', label: 'Engine', options:
@@ -30,7 +30,7 @@ register({
 
   render(body, ctx) {
     const { settings } = ctx;
-    const engine = ENGINES[settings.engine] || ENGINES.duckduckgo;
+    const engine = ENGINES[settings.engine] || ENGINES.google;
 
     body.innerHTML = `
       <form class="search-form">
