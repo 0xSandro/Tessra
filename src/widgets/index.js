@@ -39,3 +39,4 @@ import './commodities.js';
 import './polymarket.js';
 import './github.js';
 import './cryptochart.js';
+import './netspeed.js';

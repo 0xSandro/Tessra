@@ -984,13 +984,40 @@ function buildDate(field, settings, onChange) {
   return row;
 }
 
+// Custom panel field — the widget owns the rendering. Useful for things like
+// the watchface gallery where a `select` dropdown doesn't do justice to the
+// options. The field def provides a render(host, currentValue, set, settings)
+// function; we just give it a row to draw into.
+function buildPanel(field, settings, onChange) {
+  const row = document.createElement('div');
+  row.className = 'row row-panel';
+  if (field.label) {
+    const label = document.createElement('div');
+    label.className = 'row-panel-label';
+    label.textContent = field.label;
+    row.appendChild(label);
+  }
+  const host = document.createElement('div');
+  host.className = 'row-panel-host';
+  row.appendChild(host);
+  const set = v => {
+    settings[field.key] = v;
+    onChange();
+  };
+  if (typeof field.render === 'function') {
+    field.render(host, settings[field.key], set, settings);
+  }
+  return row;
+}
+
 const fieldBuilders = {
   toggle: buildToggle,
   select: buildSelect,
   slider: buildSlider,
   color:  buildColor,
   text:   buildText,
-  date:   buildDate
+  date:   buildDate,
+  panel:  buildPanel
 };
 
 function buildField(field, settings, onChange) {

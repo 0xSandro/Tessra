@@ -25,8 +25,46 @@ register({
     showSeconds: true
   }),
   settingsSchema: [
-    { key: 'watchface', type: 'select', label: 'Watchface',
-      options: () => allFaces().map(f => ({ value: f.id, label: f.label }))
+    // Watchface gallery — a horizontally-scrollable strip of mini previews.
+    // Each card mounts the actual watchface into a small preview stage with
+    // the current time, so you can see the visual style before picking it.
+    // Click a card to select. The active card gets an accent ring.
+    {
+      key: 'watchface',
+      type: 'panel',
+      label: 'Watchface',
+      render(host, current, set, settings) {
+        host.innerHTML = '<div class="wf-gallery"></div>';
+        const gallery = host.querySelector('.wf-gallery');
+        const now = new Date();
+        allFaces().forEach(face => {
+          const card = document.createElement('button');
+          card.type = 'button';
+          card.className = 'wf-card' + (face.id === current ? ' wf-active' : '');
+          card.title = face.label;
+          card.innerHTML = `
+            <div class="wf-preview" data-face="${face.id}"></div>
+            <div class="wf-label">${face.label}</div>`;
+          const preview = card.querySelector('.wf-preview');
+          // Mini preview gets a frozen snapshot — no live tick. Cheaper and
+          // avoids having to clean up intervals when the popover closes.
+          // Force showSeconds on the preview so faces that gate seconds
+          // (analog, flip, binary) still show their second hand/digits.
+          const previewSettings = Object.assign({}, settings, { showSeconds: true });
+          try {
+            const tick = face.mount(preview, previewSettings);
+            tick(now);
+          } catch (err) {
+            preview.textContent = face.label;
+          }
+          card.addEventListener('click', () => {
+            gallery.querySelectorAll('.wf-card').forEach(c => c.classList.remove('wf-active'));
+            card.classList.add('wf-active');
+            set(face.id);
+          });
+          gallery.appendChild(card);
+        });
+      }
     },
     { key: 'format', type: 'select', label: 'Format', options: [
       { value: '24h', label: '24-hour' },
@@ -47,10 +85,15 @@ register({
     tick(new Date());
 
     // Tick every second when seconds are visible, when analog (so the hands
-    // move smoothly), or when flip (chunky seconds matter). Otherwise we can
-    // get away with 15s, which is plenty for minute-only displays and saves
-    // a few hundred timer fires an hour.
-    const fast = s.showSeconds || face.id === 'analog' || face.id === 'flip';
+    // move smoothly), when flip (chunky seconds matter), or when binary
+    // (BCD dots animate by second). Otherwise we can get away with 15s,
+    // which is plenty for minute-only displays and saves a few hundred
+    // timer fires an hour.
+    // Faces that need per-second updates regardless of the showSeconds
+    // toggle: analog (smooth hands), flip (chunky digit feel), binary (BCD
+    // dots), sectors (smooth ring sweep), bars (continuous progress).
+    const ALWAYS_FAST = new Set(['analog', 'flip', 'binary', 'sectors', 'bars']);
+    const fast = s.showSeconds || ALWAYS_FAST.has(face.id);
     const interval = setInterval(() => tick(new Date()), fast ? 1000 : 15000);
     ctx.onCleanup(() => clearInterval(interval));
   }

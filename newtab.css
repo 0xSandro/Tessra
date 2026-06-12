@@ -788,6 +788,432 @@ body.dark-mode .flip-digit {
   background: linear-gradient(to bottom, #3a3a3f 0%, #3a3a3f 50%, #2a2a2f 50%, #2a2a2f 100%);
 }
 
+/* Big Number watchface — hero-sized numerals fill the widget */
+.clock-bignum { gap: 4px; padding: 4px; box-sizing: border-box; }
+.bignum-time {
+  font-size: clamp(48px, 18vh, 110px);
+  font-weight: 100;
+  letter-spacing: -3px;
+  line-height: 0.95;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+  white-space: nowrap;
+}
+.bignum-date {
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* Word Clock — "twenty past five" in a three-line stack */
+.clock-word {
+  gap: 2px;
+  padding: 12px 16px;
+  box-sizing: border-box;
+  text-align: center;
+}
+.word-top, .word-mid, .word-bot {
+  text-transform: lowercase;
+  letter-spacing: 0.5px;
+  color: var(--fg);
+  line-height: 1.15;
+}
+.word-top {
+  font-size: clamp(14px, 3.5vh, 22px);
+  color: var(--muted);
+  font-weight: 400;
+}
+.word-mid {
+  font-size: clamp(28px, 8vh, 48px);
+  font-weight: 600;
+  color: var(--accent);
+}
+.word-bot {
+  font-size: clamp(14px, 3.5vh, 22px);
+  color: var(--muted);
+  font-weight: 400;
+}
+.word-bot:empty { display: none; }
+
+/* Binary watchface — 6 columns × 4 BCD dots. Lit dots use accent; unreachable
+   bits (e.g. 8s place of hour tens) are perma-dimmed. */
+.clock-binary {
+  gap: 6px;
+  padding: 8px;
+  box-sizing: border-box;
+}
+.bin-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  align-items: center;
+}
+.bin-col {
+  display: grid;
+  grid-template-rows: repeat(4, 1fr);
+  gap: 4px;
+  height: 100%;
+  max-height: 140px;
+  justify-items: center;
+  align-items: center;
+}
+.bin-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.08);
+  border: 1px solid rgba(0,0,0,0.08);
+  transition: background 0.15s, border-color 0.15s, transform 0.12s;
+}
+.bin-dot.bin-unreach { opacity: 0.18; }
+.bin-dot.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 40%, transparent);
+  transform: scale(1.1);
+}
+.bin-date {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+body.dark-mode .bin-dot {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.08);
+}
+
+/* Roman watchface — analog variant with serif numerals */
+.clock-roman { padding: 6px; box-sizing: border-box; }
+.roman-wrap {
+  flex: 1; min-height: 0; width: 100%;
+  display: flex; align-items: center; justify-content: center;
+}
+.roman-svg { width: 100%; height: 100%; max-width: 100%; max-height: 100%; aspect-ratio: 1/1; }
+.roman-ring     { fill: none; stroke: var(--widget-border); stroke-width: 0.8; }
+.roman-labels   { font-family: 'Georgia', 'Times New Roman', serif; font-size: 8px; font-weight: 600; fill: var(--fg); }
+.roman-hour     { stroke: var(--fg);     stroke-width: 3;   stroke-linecap: round; }
+.roman-minute   { stroke: var(--fg);     stroke-width: 2;   stroke-linecap: round; }
+.roman-second   { stroke: var(--accent); stroke-width: 0.9; stroke-linecap: round; }
+.roman-center   { fill: var(--accent); }
+.roman-date     { font-size: 11px; flex-shrink: 0; }
+
+/* Pixel watchface — LED-style digital with ghost segments behind */
+.clock-pixel {
+  position: relative;
+  padding: 6px;
+  background: linear-gradient(180deg, #0a0e10 0%, #14191c 100%);
+  border-radius: 6px;
+  color: #00e676;
+  font-family: 'Courier New', ui-monospace, monospace;
+}
+.pixel-ghost, .pixel-time {
+  font-size: clamp(28px, 8vh, 56px);
+  font-weight: 700;
+  letter-spacing: 4px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: center;
+}
+.pixel-ghost {
+  position: absolute;
+  top: 50%; left: 0; right: 0;
+  transform: translateY(-50%);
+  color: rgba(0, 230, 118, 0.08);
+  pointer-events: none;
+  z-index: 0;
+}
+.pixel-time {
+  position: relative;
+  z-index: 1;
+  color: #00ff7f;
+  text-shadow: 0 0 8px rgba(0, 255, 127, 0.55), 0 0 18px rgba(0, 255, 127, 0.25);
+}
+.pixel-date {
+  position: relative;
+  z-index: 1;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: rgba(0, 230, 118, 0.7);
+  text-shadow: 0 0 4px rgba(0, 230, 118, 0.3);
+}
+
+/* Sectors watchface — three concentric rings (H/M/S progress) */
+.clock-sectors { padding: 6px; box-sizing: border-box; }
+.sectors-wrap {
+  flex: 1; min-height: 0; width: 100%;
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+.sectors-svg { width: 100%; height: 100%; max-width: 100%; max-height: 100%; aspect-ratio: 1/1; }
+.sector-track { fill: none; stroke: var(--widget-border); }
+.sector-fill { fill: none; stroke-linecap: round; transition: stroke-dashoffset 0.18s linear; }
+.sector-h { stroke: color-mix(in srgb, var(--accent) 55%, transparent); }
+.sector-m { stroke: color-mix(in srgb, var(--accent) 75%, transparent); }
+.sector-s { stroke: var(--accent); }
+.sectors-center {
+  position: absolute;
+  font-size: clamp(16px, 4vh, 26px);
+  font-weight: 500;
+  letter-spacing: -0.5px;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+.sectors-date { font-size: 11px; flex-shrink: 0; }
+
+/* Bars watchface — three horizontal progress bars (H/M/S) */
+.clock-bars {
+  padding: 14px;
+  box-sizing: border-box;
+  gap: 10px !important;
+  align-items: stretch !important;
+}
+.bars-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.bars-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 1px;
+  width: 14px;
+  text-align: center;
+}
+.bars-track {
+  flex: 1;
+  height: 8px;
+  background: var(--widget-border);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+.bars-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  width: 0%;
+  transition: width 0.18s ease-out;
+}
+.bars-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  width: 28px;
+  text-align: right;
+}
+.bars-date { font-size: 11px; flex-shrink: 0; }
+
+/* Terminal watchface — CLI prompt aesthetic */
+.clock-terminal {
+  font-family: ui-monospace, 'Courier New', monospace;
+  background: #0c1014;
+  padding: 14px 16px;
+  border-radius: 6px;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  gap: 4px !important;
+  color: #d8e2dc;
+  text-align: left;
+}
+.term-line, .term-out {
+  font-size: clamp(11px, 2.2vh, 14px);
+  line-height: 1.4;
+  word-break: break-all;
+}
+.term-prompt {
+  color: #00d27a;
+  font-weight: 700;
+}
+.term-cmd { color: #e8e8e8; }
+.term-out { color: #c0c8d0; padding-left: 4px; }
+.term-cursor {
+  display: inline-block;
+  width: 0.6em;
+  color: #00d27a;
+  animation: term-blink 1s steps(1) infinite;
+  margin-left: 2px;
+}
+@keyframes term-blink {
+  50% { opacity: 0; }
+}
+
+/* Mood watchface — full-bleed gradient driven by time of day */
+.clock-mood {
+  padding: 18px;
+  box-sizing: border-box;
+  align-items: flex-start !important;
+  justify-content: flex-end !important;
+  text-align: left;
+  background: linear-gradient(135deg, #5a83b8 0%, #2a4b75 100%);
+  color: #fff;
+  border-radius: 6px;
+  transition: background 4s ease-out;
+}
+.mood-time {
+  font-size: clamp(36px, 12vh, 80px);
+  font-weight: 200;
+  letter-spacing: -2px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+}
+.mood-date {
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  text-transform: capitalize;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Vertical watchface — stacked giant HH/MM/SS blocks */
+.clock-vertical {
+  padding: 12px 16px;
+  box-sizing: border-box;
+  align-items: stretch !important;
+  gap: 0 !important;
+}
+.vert-block {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--widget-border);
+  min-height: 0;
+}
+.vert-block:last-child { border-bottom: none; }
+.vert-num {
+  font-size: clamp(28px, 11vh, 76px);
+  font-weight: 200;
+  letter-spacing: -2px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+.vert-lbl {
+  font-size: clamp(10px, 2.5vh, 16px);
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 2px;
+}
+
+/* Watchface gallery — horizontal scroll strip of mini live previews in the
+   settings popover. Each card embeds the actual face mounted at small size. */
+.row-panel { flex-direction: column; align-items: stretch; gap: 6px; }
+.row-panel-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.row-panel-host { width: 100%; }
+.wf-gallery {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 2px 8px;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+}
+.wf-card {
+  flex: 0 0 auto;
+  width: 100px;
+  background: transparent;
+  border: 2px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--muted);
+  scroll-snap-align: start;
+  transition: border-color 0.15s, transform 0.1s, background 0.12s;
+  overflow: hidden;
+}
+.wf-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--panel-border));
+  transform: translateY(-1px);
+}
+.wf-card.wf-active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.wf-preview {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: rgba(0,0,0,0.025);
+  overflow: hidden;
+  position: relative;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+body.dark-mode .wf-preview { background: rgba(255,255,255,0.04); }
+.wf-label {
+  padding: 5px 6px;
+  text-align: center;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.wf-card.wf-active .wf-label { color: var(--fg); }
+
+/* Scale every face mounted inside a preview down to fit the small card.
+   Each face renders the same DOM as the real widget; these rules shrink
+   text and SVG without changing the face's source. */
+.wf-preview .clock-face { gap: 2px; padding: 4px; box-sizing: border-box; }
+.wf-preview .clock-time { font-size: 16px; letter-spacing: 0; }
+.wf-preview .clock-date { font-size: 7px; }
+.wf-preview .bignum-time { font-size: 22px; letter-spacing: -1px; }
+.wf-preview .bignum-date { font-size: 6px; letter-spacing: 0.3px; }
+.wf-preview .analog-svg { max-height: 100%; }
+.wf-preview .analog-date { font-size: 6px; }
+.wf-preview .flip-row { gap: 2px; }
+.wf-preview .flip-group { gap: 1px; }
+.wf-preview .flip-digit { font-size: 13px; padding: 2px 3px; border-radius: 2px; min-width: 0.7em; }
+.wf-preview .flip-digit::after { left: 1px; right: 1px; }
+.wf-preview .flip-digit-small { font-size: 9px; padding: 1px 2px; border-radius: 2px; }
+.wf-preview .flip-sep { font-size: 12px; }
+.wf-preview .flip-meta { font-size: 6px; gap: 4px; }
+.wf-preview .word-top, .wf-preview .word-bot { font-size: 8px; letter-spacing: 0.2px; }
+.wf-preview .word-mid { font-size: 13px; letter-spacing: 0.3px; }
+.wf-preview .bin-grid { gap: 2px; }
+.wf-preview .bin-col { gap: 1.5px; max-height: 48px; }
+.wf-preview .bin-dot { width: 4px; height: 4px; border-width: 0.5px; }
+.wf-preview .bin-dot.on { box-shadow: 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent); transform: scale(1); }
+.wf-preview .bin-date { font-size: 6px; }
+.wf-preview .roman-labels { font-size: 7px; }
+.wf-preview .roman-svg { max-height: 100%; }
+.wf-preview .roman-date { font-size: 6px; }
+.wf-preview .clock-pixel { padding: 3px; border-radius: 3px; }
+.wf-preview .pixel-time, .wf-preview .pixel-ghost { font-size: 13px; letter-spacing: 1px; }
+.wf-preview .pixel-date { font-size: 6px; letter-spacing: 0.3px; }
+.wf-preview .sectors-svg { max-height: 100%; }
+.wf-preview .sectors-center { font-size: 10px; }
+.wf-preview .sectors-date { font-size: 6px; }
+.wf-preview .clock-bars { padding: 6px; gap: 3px !important; }
+.wf-preview .bars-row { gap: 4px; }
+.wf-preview .bars-label { font-size: 7px; width: 8px; }
+.wf-preview .bars-track { height: 3px; }
+.wf-preview .bars-val { font-size: 7px; width: 12px; }
+.wf-preview .bars-date { font-size: 6px; }
+.wf-preview .clock-terminal { padding: 4px 6px; gap: 1px !important; border-radius: 3px; }
+.wf-preview .term-line, .wf-preview .term-out { font-size: 6px; line-height: 1.3; }
+.wf-preview .clock-mood { padding: 6px; border-radius: 3px; }
+.wf-preview .mood-time { font-size: 14px; letter-spacing: -0.5px; }
+.wf-preview .mood-date { font-size: 6px; letter-spacing: 0.2px; }
+.wf-preview .clock-vertical { padding: 4px 6px; }
+.wf-preview .vert-num { font-size: 14px; letter-spacing: -0.5px; }
+.wf-preview .vert-lbl { font-size: 6px; letter-spacing: 0.8px; }
+
 /* Search */
 .search-form {
   display: flex;
@@ -1846,6 +2272,104 @@ body.dark-mode .sparkline-down { --spark-color: #ef4444; }
   font-style: italic;
   padding: 16px;
   text-align: center;
+}
+
+/* Internet speed widget */
+.netspeed {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 10px;
+}
+.net-readout {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  align-items: center;
+}
+.net-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-align: center;
+  min-width: 0;
+}
+.net-stat-main { flex: 1.4; }
+.net-value {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.net-stat-main .net-value { gap: 6px; }
+.net-down-val {
+  font-size: clamp(28px, 9vh, 48px);
+  font-weight: 300;
+  color: var(--accent);
+  letter-spacing: -1px;
+  line-height: 1;
+}
+.net-ping-val {
+  font-size: clamp(20px, 6vh, 32px);
+  font-weight: 300;
+  color: var(--fg);
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+.net-unit {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.net-label {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.net-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--muted);
+  flex-shrink: 0;
+  min-height: 14px;
+}
+.net-conn {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.net-progress { font-style: italic; flex-shrink: 0; }
+.net-progress.net-error { color: #c53030; font-style: normal; }
+.net-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.net-run {
+  flex: 0 0 auto;
+  padding: 6px 14px;
+}
+.net-updated {
+  flex: 1;
+  text-align: right;
+  font-size: 10px;
+  color: var(--muted);
+  font-style: italic;
 }
 
 /* GitHub commit graph */

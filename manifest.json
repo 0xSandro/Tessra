@@ -26,7 +26,8 @@
     "https://gamma-api.polymarket.com/*",
     "https://github-contributions-api.jogruber.de/*",
     "https://widgets.coingecko.com/*",
-    "https://www.coingecko.com/*"
+    "https://www.coingecko.com/*",
+    "https://speed.cloudflare.com/*"
   ],
   "content_security_policy": "script-src 'self' https://widgets.coingecko.com; object-src 'self';",
   "browser_specific_settings": {
