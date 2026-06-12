@@ -1,4 +1,4 @@
-# Tessra — Custom Starting Page (Firefox)
+# Tessra — Custom Starting Page / new Tab (Firefox)
 
 ## Install (temporary, for development)
 
