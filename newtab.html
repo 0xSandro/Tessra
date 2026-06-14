@@ -12,6 +12,19 @@
        with another widget's edge or the viewport midlines. -->
   <svg id="snap-guides" aria-hidden="true"></svg>
 
+  <!-- Z-order popover anchored to a widget's stacking button -->
+  <div id="zorder-popover" class="hidden" role="menu" aria-label="Layer order">
+    <button class="zorder-item" data-action="front">Bring to front</button>
+    <button class="zorder-item" data-action="back">Send to back</button>
+  </div>
+
+  <!-- Command palette (⌘K / Ctrl+K) -->
+  <div id="cmd-palette" class="hidden" role="dialog" aria-label="Command palette">
+    <input class="cmd-input" type="text" placeholder="Type a command or widget…" autocomplete="off" spellcheck="false"/>
+    <div class="cmd-results" role="listbox"></div>
+    <div class="cmd-hint">↑↓ navigate · Enter run · Esc close</div>
+  </div>
+
   <button id="edit-toggle" title="Toggle edit mode (E)">
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
@@ -88,6 +101,36 @@
           <span class="unit">%</span>
           <button class="reset-btn" data-reset="glassAlpha" title="Reset to default" aria-label="Reset"></button>
         </div>
+      </section>
+
+      <section class="control-group">
+        <h3>Typography</h3>
+        <div class="row">
+          <span>Font</span>
+          <select id="fontFamily" class="theme-select">
+            <option value="system">System default</option>
+            <option value="inter">Inter</option>
+            <option value="geist">Geist</option>
+            <option value="jetbrains">JetBrains Mono</option>
+            <option value="serif">Serif</option>
+            <option value="mono">Monospace</option>
+            <option value="custom">Custom upload…</option>
+          </select>
+          <button class="reset-btn" data-reset="fontFamily" title="Reset to default" aria-label="Reset"></button>
+        </div>
+        <div class="upload-row" data-show="fontFamily:custom">
+          <button type="button" class="upload-btn" id="fontUploadBtn">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <span>Choose .woff2 / .woff / .ttf</span>
+          </button>
+          <button type="button" class="upload-btn" id="fontUploadClear" disabled>Clear</button>
+          <input type="file" id="fontUploadFile" accept=".woff2,.woff,.ttf,.otf,font/woff2,font/woff,font/ttf,font/otf" hidden/>
+        </div>
+        <p class="panel-microhint" data-show="fontFamily:inter,geist,jetbrains">If the font isn't installed on your system, it falls back to system fonts. Use custom upload to bundle a specific font.</p>
       </section>
 
       <section class="control-group">
@@ -194,10 +237,13 @@
       <section class="control-group">
         <h3>Your setup</h3>
         <div class="presets-actions">
-          <button class="btn-subtle" disabled>Export current layout…</button>
-          <button class="btn-subtle" disabled>Import preset…</button>
+          <button class="btn-subtle" id="preset-export">Export current layout…</button>
+          <button class="btn-subtle" id="preset-import">Import preset…</button>
+          <button class="btn-subtle" id="preset-share-copy">Copy as share string</button>
+          <button class="btn-subtle" id="preset-share-paste">Paste a share string…</button>
+          <input type="file" id="preset-import-file" accept="application/json,.json" hidden/>
         </div>
-        <p class="presets-note">Import / export coming soon.</p>
+        <p class="presets-note">Exports a single JSON file with all widgets, theme, favorites, and quick-access settings. Share strings are compact base64 you can paste anywhere — DMs, gists, anywhere. Importing replaces your current layout.</p>
       </section>
 
       <section class="control-group">
@@ -289,6 +335,12 @@
         <div class="widget-title-wrap">
           <span class="widget-title" contenteditable="true" spellcheck="false"></span>
         </div>
+        <button class="widget-zorder" title="Layer order" aria-label="Layer order">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polygon points="12 2 22 8 12 14 2 8"/>
+            <polyline points="2 16 12 22 22 16"/>
+          </svg>
+        </button>
         <button class="widget-lock" title="Lock / unlock" aria-label="Lock widget">
           <svg class="widget-lock-open" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="4" y="11" width="16" height="10" rx="2"/>

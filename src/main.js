@@ -51,7 +51,10 @@ const defaultTheme = () => ({
   darkMode: false,        // dark UI variant
   surfaceStyle: 'liquid', // 'flat' | 'glass' | 'liquid'
   glassBlur: 9,           // backdrop-filter blur in px (only used when glass/liquid)
-  glassAlpha: 30          // background opacity 10-90 (translated to 0.10-0.90 in CSS)
+  glassAlpha: 30,         // background opacity 10-90 (translated to 0.10-0.90 in CSS)
+  fontFamily: 'system',   // 'system' | 'inter' | 'geist' | 'jetbrains' | 'serif' | 'mono' | 'custom'
+  customFontDataUrl: null,// data: URL for an uploaded font file
+  customFontName: null    // user-visible name of the uploaded font
 });
 
 function id() { return Math.random().toString(36).slice(2, 9); }
@@ -217,6 +220,40 @@ function bringToFront(w, node) {
   w.z = state.maxZ;
   if (node) node.style.zIndex = w.z;
 }
+
+// Send a widget to the back. Renumbers all widget z-orders so the target
+// gets z = 1 and everyone else holds their relative stacking order. Keeps
+// maxZ tight so it can never collide with the chrome z-indexes (10000+).
+function sendToBack(w) {
+  const sorted = state.widgets.slice().sort((a, b) => (a.z || 0) - (b.z || 0));
+  // Pull this widget out, then place it at the bottom of the stack
+  const rest = sorted.filter(x => x.id !== w.id);
+  let z = 1;
+  w.z = z++;
+  rest.forEach(o => { o.z = z++; });
+  state.maxZ = z - 1;
+  document.querySelectorAll('#board .widget').forEach(n => {
+    const widget = state.widgets.find(x => x.id === n.dataset.id);
+    if (widget) n.style.zIndex = widget.z;
+  });
+}
+
+// Background-aware OS notification. No-ops when the tab is focused (the
+// in-page flash is enough) or when the user has denied permission. On the
+// first call we lazily request permission; subsequent calls just fire.
+async function notifyIfBackground(title, body) {
+  if (!('Notification' in window)) return;
+  if (!document.hidden) return; // tab focused — UI is visible
+  try {
+    if (Notification.permission === 'default') {
+      await Notification.requestPermission();
+    }
+    if (Notification.permission !== 'granted') return;
+    new Notification(title, { body, icon: 'icons/icon-96.svg', silent: false });
+  } catch { /* notification API can throw on some browsers — silent fail */ }
+}
+// Expose globally so widgets can fire notifications without import gymnastics
+window.notifyIfBackground = notifyIfBackground;
 
 // Reference-counted "user is currently dragging/resizing something" flag.
 // Glass/liquid mode pays a large per-frame cost for backdrop-filter blur;
@@ -484,6 +521,15 @@ function renderWidget(w) {
   // Lock toggle. Persisted on the widget object. CSS handles the icon swap
   // (open ↔ closed padlock) and gates the resize handle / × button.
   if (w.locked) node.classList.add('locked');
+  // Z-order popover trigger (Bring to front / Send to back)
+  const zorderBtn = node.querySelector('.widget-zorder');
+  if (zorderBtn) {
+    zorderBtn.addEventListener('mousedown', e => e.stopPropagation());
+    zorderBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      openZOrderPopover(zorderBtn, w, node);
+    });
+  }
   const lockBtn = node.querySelector('.widget-lock');
   if (lockBtn) {
     lockBtn.addEventListener('mousedown', e => e.stopPropagation());
@@ -567,20 +613,27 @@ function enableDrag(node, w) {
     const nx = snap(ox + (clientX - startX));
     const ny = snap(oy + (clientY - startY));
 
-    // Snap candidates: every other widget (skipping group members so the
-    // moving group doesn't snap to itself) plus the viewport midlines.
-    const skipIds = new Set([w.id]);
-    if (groupOffsets) groupOffsets.forEach(g => skipIds.add(g.widget.id));
-    const others = state.widgets
-      .filter(x => !skipIds.has(x.id))
-      .map(rectFor);
-    const d = {
-      left: nx, top: ny,
-      right: nx + w.w, bottom: ny + w.h,
-      w: w.w, h: w.h,
-      cx: nx + w.w / 2, cy: ny + w.h / 2
-    };
-    const { bestX, bestY } = computeSnap(d, others, window.innerWidth, window.innerHeight);
+    // Sticky notes drag freely without snap or alignment guides — they're
+    // tossed onto the desktop intentionally and the tilt makes edge-snaps
+    // look wrong anyway. Other widgets snap to neighbors + viewport midlines.
+    const isSticky = w.type === 'stickies';
+    let bestX = null, bestY = null;
+    if (!isSticky) {
+      // Snap candidates: every other widget (skipping group members so the
+      // moving group doesn't snap to itself) plus the viewport midlines.
+      const skipIds = new Set([w.id]);
+      if (groupOffsets) groupOffsets.forEach(g => skipIds.add(g.widget.id));
+      const others = state.widgets
+        .filter(x => !skipIds.has(x.id) && x.type !== 'stickies') // ignore stickies as snap targets too
+        .map(rectFor);
+      const d = {
+        left: nx, top: ny,
+        right: nx + w.w, bottom: ny + w.h,
+        w: w.w, h: w.h,
+        cx: nx + w.w / 2, cy: ny + w.h / 2
+      };
+      ({ bestX, bestY } = computeSnap(d, others, window.innerWidth, window.innerHeight));
+    }
 
     const fx = Math.max(0, nx + (bestX ? bestX.delta : 0));
     const fy = Math.max(0, ny + (bestY ? bestY.delta : 0));
@@ -1383,6 +1436,42 @@ function applyTheme() {
   // Glass tuning vars (only meaningful when surfaceStyle is glass or liquid)
   document.documentElement.style.setProperty('--glass-blur', (t.glassBlur ?? 9) + 'px');
   document.documentElement.style.setProperty('--glass-alpha', ((t.glassAlpha ?? 30) / 100).toFixed(3));
+  // Font family — system stacks per option, with the named font listed first
+  // so the system uses it when installed. Custom uploads inject an @font-face
+  // rule (see installCustomFont) and use the 'TessraCustom' family name.
+  const FONT_STACKS = {
+    system:    'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    inter:     '"Inter", system-ui, -apple-system, sans-serif',
+    geist:     '"Geist", "Geist Sans", system-ui, sans-serif',
+    jetbrains: '"JetBrains Mono", ui-monospace, "Menlo", "Consolas", monospace',
+    serif:     'ui-serif, Georgia, Cambria, "Times New Roman", serif',
+    mono:      'ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace',
+    custom:    '"TessraCustom", system-ui, sans-serif'
+  };
+  const stack = FONT_STACKS[t.fontFamily || 'system'] || FONT_STACKS.system;
+  document.documentElement.style.setProperty('--font-family', stack);
+  if (t.fontFamily === 'custom' && t.customFontDataUrl) {
+    installCustomFont(t.customFontDataUrl);
+  } else {
+    removeCustomFont();
+  }
+}
+
+// Inject a single <style id="custom-font-face"> tag with the @font-face rule.
+// Idempotent — calling repeatedly with the same data URL is a no-op.
+function installCustomFont(dataUrl) {
+  let styleEl = document.getElementById('custom-font-face');
+  const css = `@font-face { font-family: "TessraCustom"; src: url("${dataUrl}"); font-display: swap; }`;
+  if (!styleEl) {
+    styleEl = document.createElement('style');
+    styleEl.id = 'custom-font-face';
+    document.head.appendChild(styleEl);
+  }
+  if (styleEl.textContent !== css) styleEl.textContent = css;
+}
+function removeCustomFont() {
+  const el = document.getElementById('custom-font-face');
+  if (el) el.remove();
 }
 
 function bindTheme() {
@@ -1595,6 +1684,25 @@ function bindTheme() {
     applyTheme(); updateSeg(); saveNow();
   });
 
+  // Font family select — bind to the theme state and re-apply on change.
+  // Exposes `updateSeg` globally so the custom-font upload handler can
+  // refresh `data-show=fontFamily:...` visibility after setting fontFamily.
+  window._updateSeg = updateSeg;
+  const fontSel = panel.querySelector('#fontFamily');
+  if (fontSel) {
+    fontSel.value = t.fontFamily || 'system';
+    fontSel.addEventListener('change', () => {
+      t.fontFamily = fontSel.value;
+      applyTheme();
+      updateSeg();
+      saveNow();
+    });
+  }
+  // Allow the data-show system to also flip on fontFamily changes
+  const origUpdateSeg = updateSeg;
+  // (updateSeg already iterates [data-show] so fontFamily is picked up
+  // automatically — no extra wiring needed.)
+
   updateSeg();
 }
 
@@ -1707,6 +1815,418 @@ function toggleQuickPicker() {
   }, 0);
 }
 
+// ----- Preset import / export -----
+// Export = JSON snapshot of the same shape serialize() emits, wrapped with a
+// small envelope (format, version, exportedAt) so future versions can detect
+// shape mismatches. Import accepts either the bare state or the wrapped form
+// and runs everything through migrate() so older exports stay valid.
+
+const PRESET_FORMAT  = 'tessra-layout';
+const PRESET_VERSION = 1;
+
+function exportLayout() {
+  const payload = {
+    format:     PRESET_FORMAT,
+    version:    PRESET_VERSION,
+    exportedAt: new Date().toISOString(),
+    state:      serialize()
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `tessra-layout-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Defer revoke so Firefox's download manager finishes reading the blob
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function importLayoutFromFile(file) {
+  let parsed;
+  try {
+    const text = await file.text();
+    parsed = JSON.parse(text);
+  } catch {
+    alert('Could not parse the file — make sure it is a valid Tessra JSON layout.');
+    return;
+  }
+  // Accept both the wrapped { format, version, state } and the bare state
+  // shape (so users can paste in a serialize() output directly).
+  let stateLike = parsed;
+  if (parsed && parsed.format === PRESET_FORMAT && parsed.state) {
+    stateLike = parsed.state;
+  }
+  if (!stateLike || !Array.isArray(stateLike.widgets)) {
+    alert('That file does not look like a Tessra layout.');
+    return;
+  }
+  if (!confirm('Importing will replace your current layout. Continue?')) return;
+
+  // Tear down every existing widget cleanly so timers/listeners don't leak.
+  document.querySelectorAll('#board .widget').forEach(node => {
+    if (node._cleanups) node._cleanups.forEach(fn => { try { fn(); } catch {} });
+    node.remove();
+  });
+  clearSelection();
+  clearSnapGuides();
+
+  // Replace state, run through migrate() so any legacy fields are normalized
+  // against the current widget registry. Save immediately so a refresh
+  // before any further action preserves the import.
+  state = migrate(stateLike);
+  if (!state.theme) state.theme = defaultTheme();
+
+  applyTheme();
+  state.widgets.forEach(renderWidget);
+  populateCatalog();
+  renderQuickAccess();
+  saveNow();
+
+  // The theme controls in the side panel hold cached refs from bindTheme();
+  // reload is the simplest way to make the panel reflect the new state.
+  // Delay so the save commits to storage first.
+  setTimeout(() => window.location.reload(), 250);
+}
+
+function setupPresetIO() {
+  const exportBtn = document.getElementById('preset-export');
+  const importBtn = document.getElementById('preset-import');
+  const fileIn    = document.getElementById('preset-import-file');
+  const shareCopyBtn  = document.getElementById('preset-share-copy');
+  const sharePasteBtn = document.getElementById('preset-share-paste');
+  if (!exportBtn || !importBtn || !fileIn) return;
+  exportBtn.addEventListener('click', exportLayout);
+  importBtn.addEventListener('click', () => fileIn.click());
+  fileIn.addEventListener('change', e => {
+    const f = e.target.files && e.target.files[0];
+    if (f) importLayoutFromFile(f);
+    fileIn.value = '';   // allow re-importing the same file
+  });
+  if (shareCopyBtn) shareCopyBtn.addEventListener('click', copyShareString);
+  if (sharePasteBtn) sharePasteBtn.addEventListener('click', pasteShareString);
+}
+
+// ----- Shareable layout strings -----
+// Compact base64 encoding of the layout JSON. Prefixed with 'gz:' when we
+// can compress, 'raw:' otherwise — decode is forward-compatible.
+
+async function encodeShareString() {
+  const payload = JSON.stringify({
+    format: PRESET_FORMAT, version: PRESET_VERSION, state: serialize()
+  });
+  if (typeof CompressionStream !== 'undefined') {
+    try {
+      const stream = new Blob([payload]).stream().pipeThrough(new CompressionStream('gzip'));
+      const buf = await new Response(stream).arrayBuffer();
+      let bin = '';
+      const bytes = new Uint8Array(buf);
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      return 'tessra1:gz:' + btoa(bin);
+    } catch { /* fall through to raw */ }
+  }
+  return 'tessra1:raw:' + btoa(unescape(encodeURIComponent(payload)));
+}
+
+async function decodeShareString(s) {
+  s = (s || '').trim();
+  // Accept the bare base64 too — try gz first, then raw
+  let body = s;
+  let mode = 'raw';
+  const m = /^tessra1:(gz|raw):(.+)$/i.exec(s);
+  if (m) { mode = m[1]; body = m[2]; }
+  if (mode === 'gz' && typeof DecompressionStream !== 'undefined') {
+    const bin = atob(body);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+    const text = await new Response(stream).text();
+    return JSON.parse(text);
+  }
+  // Raw base64
+  return JSON.parse(decodeURIComponent(escape(atob(body))));
+}
+
+async function copyShareString() {
+  try {
+    const s = await encodeShareString();
+    await navigator.clipboard.writeText(s);
+    flashButton('preset-share-copy', 'Copied!');
+  } catch (err) {
+    alert('Could not copy: ' + (err.message || 'clipboard unavailable'));
+  }
+}
+
+async function pasteShareString() {
+  // Try reading clipboard first; fall back to prompt if blocked.
+  let s = '';
+  try {
+    s = await navigator.clipboard.readText();
+  } catch { /* permission denied or unsupported — prompt instead */ }
+  if (!s) s = prompt('Paste a Tessra share string:') || '';
+  s = s.trim();
+  if (!s) return;
+  let parsed;
+  try {
+    parsed = await decodeShareString(s);
+  } catch (err) {
+    alert('Could not decode share string: ' + (err.message || 'invalid format'));
+    return;
+  }
+  const stateLike = (parsed && parsed.format === PRESET_FORMAT && parsed.state) ? parsed.state : parsed;
+  if (!stateLike || !Array.isArray(stateLike.widgets)) {
+    alert('Decoded payload does not look like a Tessra layout.');
+    return;
+  }
+  if (!confirm('Importing will replace your current layout. Continue?')) return;
+  document.querySelectorAll('#board .widget').forEach(node => {
+    if (node._cleanups) node._cleanups.forEach(fn => { try { fn(); } catch {} });
+    node.remove();
+  });
+  clearSelection();
+  clearSnapGuides();
+  state = migrate(stateLike);
+  if (!state.theme) state.theme = defaultTheme();
+  applyTheme();
+  state.widgets.forEach(renderWidget);
+  populateCatalog();
+  renderQuickAccess();
+  saveNow();
+  setTimeout(() => window.location.reload(), 250);
+}
+
+function flashButton(id, msg) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const original = el.textContent;
+  el.textContent = msg;
+  el.disabled = true;
+  setTimeout(() => { el.textContent = original; el.disabled = false; }, 1200);
+}
+
+// ----- Z-order popover -----
+let zOrderTarget = null;
+function openZOrderPopover(anchor, w, node) {
+  const pop = document.getElementById('zorder-popover');
+  if (!pop) return;
+  zOrderTarget = { w, node };
+  const rect = anchor.getBoundingClientRect();
+  pop.style.top   = (rect.bottom + 4) + 'px';
+  pop.style.right = (window.innerWidth - rect.right) + 'px';
+  pop.classList.remove('hidden');
+  setTimeout(() => {
+    const close = e => {
+      if (pop.contains(e.target) || e.target === anchor) return;
+      pop.classList.add('hidden');
+      zOrderTarget = null;
+      document.removeEventListener('mousedown', close);
+    };
+    document.addEventListener('mousedown', close);
+  }, 0);
+}
+function setupZOrderPopover() {
+  const pop = document.getElementById('zorder-popover');
+  if (!pop) return;
+  pop.querySelectorAll('.zorder-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!zOrderTarget) return;
+      const { w, node } = zOrderTarget;
+      if (btn.dataset.action === 'front') bringToFront(w, node);
+      else if (btn.dataset.action === 'back') sendToBack(w);
+      scheduleSave();
+      pop.classList.add('hidden');
+      zOrderTarget = null;
+    });
+  });
+}
+
+// ----- Font upload (Custom font picker) -----
+function setupFontUpload() {
+  const btn  = document.getElementById('fontUploadBtn');
+  const clr  = document.getElementById('fontUploadClear');
+  const file = document.getElementById('fontUploadFile');
+  if (!btn || !clr || !file) return;
+  function refreshClear() {
+    clr.disabled = !state.theme.customFontDataUrl;
+    clr.textContent = state.theme.customFontDataUrl ? `Clear (${state.theme.customFontName || 'custom'})` : 'Clear';
+  }
+  btn.addEventListener('click', () => file.click());
+  file.addEventListener('change', async e => {
+    const f = e.target.files && e.target.files[0];
+    file.value = '';
+    if (!f) return;
+    // 4 MB cap so we don't blow up localStorage with a 10 MB font
+    if (f.size > 4 * 1024 * 1024) {
+      alert('Font file is too large (>4 MB). Storage would balloon — please pick a smaller .woff2.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      state.theme.customFontDataUrl = reader.result;
+      state.theme.customFontName = f.name;
+      state.theme.fontFamily = 'custom';
+      applyTheme();
+      // Reflect in the select widget
+      const sel = document.getElementById('fontFamily');
+      if (sel) sel.value = 'custom';
+      // Toggle visibility rows
+      const updateSeg = window._updateSeg;
+      if (typeof updateSeg === 'function') updateSeg();
+      refreshClear();
+      scheduleSave();
+    };
+    reader.readAsDataURL(f);
+  });
+  clr.addEventListener('click', () => {
+    state.theme.customFontDataUrl = null;
+    state.theme.customFontName = null;
+    if (state.theme.fontFamily === 'custom') state.theme.fontFamily = 'system';
+    applyTheme();
+    const sel = document.getElementById('fontFamily');
+    if (sel) sel.value = state.theme.fontFamily;
+    refreshClear();
+    scheduleSave();
+  });
+  refreshClear();
+}
+
+// ----- Command palette (⌘K / Ctrl+K) -----
+// Fuzzy-search across all available commands: add-widget shortcuts for every
+// registered type, plus a handful of layout/theme actions. Up/Down to
+// navigate, Enter to run, Esc to close.
+function buildCommandList() {
+  const cmds = [];
+  cmds.push(
+    { id: 'edit-toggle',  label: 'Toggle edit mode',                  hint: 'E',     run: () => setEditMode(!document.body.classList.contains('edit-mode')) },
+    { id: 'dark-toggle',  label: 'Toggle dark mode',                  hint: '',      run: () => { state.theme.darkMode = !state.theme.darkMode; applyTheme(); const dm = document.getElementById('darkMode'); if (dm) dm.checked = !!state.theme.darkMode; scheduleSave(); } },
+    { id: 'theme-reset',  label: 'Reset theme to defaults',           hint: '',      run: () => { Object.assign(state.theme, defaultTheme()); applyTheme(); scheduleSave(); window.location.reload(); } },
+    { id: 'export',       label: 'Export layout as file…',            hint: '',      run: () => exportLayout() },
+    { id: 'import',       label: 'Import layout from file…',          hint: '',      run: () => { const f = document.getElementById('preset-import-file'); if (f) f.click(); } },
+    { id: 'share-copy',   label: 'Copy layout as share string',       hint: '',      run: () => copyShareString() },
+    { id: 'share-paste',  label: 'Paste a share string…',             hint: '',      run: () => pasteShareString() },
+    { id: 'panel-toggle', label: 'Open the side panel',               hint: '',      run: () => setEditMode(true) },
+  );
+  registry.all().forEach(def => {
+    cmds.push({
+      id: 'spawn-' + def.type,
+      label: `Add ${def.title}`,
+      hint: def.category || 'widget',
+      iconHtml: def.icon || '◻',
+      run: () => spawnWidget(def.type)
+    });
+  });
+  return cmds;
+}
+
+// Simple subsequence fuzzy match: characters of `q` appear in order in the
+// haystack. Score by how tightly they cluster (lower index gap = better).
+function fuzzyScore(haystack, q) {
+  if (!q) return 0;
+  const h = haystack.toLowerCase();
+  const needle = q.toLowerCase();
+  let hi = 0, score = 0, lastMatch = -1;
+  for (let i = 0; i < needle.length; i++) {
+    const c = needle[i];
+    const found = h.indexOf(c, hi);
+    if (found < 0) return -1;
+    if (lastMatch >= 0) score -= (found - lastMatch - 1);
+    if (found === 0 || h[found - 1] === ' ') score += 5;  // word-start bonus
+    lastMatch = found;
+    hi = found + 1;
+  }
+  score += 100 - h.length; // shorter labels score higher
+  return score;
+}
+
+function setupCommandPalette() {
+  const palette = document.getElementById('cmd-palette');
+  const input   = palette ? palette.querySelector('.cmd-input') : null;
+  const results = palette ? palette.querySelector('.cmd-results') : null;
+  if (!palette || !input || !results) return;
+  let activeIdx = 0;
+  let visible   = false;
+  let lastList  = [];
+
+  function close() {
+    palette.classList.add('hidden');
+    visible = false;
+    input.value = '';
+  }
+  function open() {
+    palette.classList.remove('hidden');
+    visible = true;
+    input.value = '';
+    activeIdx = 0;
+    render();
+    setTimeout(() => input.focus(), 0);
+  }
+  function render() {
+    const q = input.value.trim();
+    const all = buildCommandList();
+    const scored = all.map(c => ({ c, s: fuzzyScore(c.label, q) }))
+      .filter(x => x.s >= 0 || !q)
+      .sort((a, b) => b.s - a.s)
+      .slice(0, 30)
+      .map(x => x.c);
+    lastList = scored;
+    if (activeIdx >= scored.length) activeIdx = 0;
+    if (!scored.length) {
+      results.innerHTML = '<div class="cmd-empty">No matches</div>';
+      return;
+    }
+    results.innerHTML = scored.map((c, i) => `
+      <button class="cmd-item ${i === activeIdx ? 'cmd-active' : ''}" data-i="${i}" type="button">
+        <span class="cmd-icon">${c.iconHtml || '·'}</span>
+        <span class="cmd-label">${escapeHtml(c.label)}</span>
+        ${c.hint ? `<span class="cmd-hint-tag">${escapeHtml(c.hint)}</span>` : ''}
+      </button>`).join('');
+    results.querySelectorAll('.cmd-item').forEach(btn => {
+      btn.addEventListener('mousedown', e => e.preventDefault()); // keep input focused
+      btn.addEventListener('click', () => {
+        activeIdx = +btn.dataset.i;
+        run();
+      });
+    });
+  }
+  function run() {
+    const c = lastList[activeIdx];
+    if (!c) return;
+    close();
+    try { c.run(); } catch (err) { console.error('[Tessra cmd]', err); }
+  }
+  function moveActive(delta) {
+    if (!lastList.length) return;
+    activeIdx = (activeIdx + delta + lastList.length) % lastList.length;
+    render();
+    const el = results.querySelector('.cmd-active');
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }
+
+  input.addEventListener('input', render);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); moveActive(1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); moveActive(-1); }
+    else if (e.key === 'Enter')   { e.preventDefault(); run(); }
+    else if (e.key === 'Escape')  { e.preventDefault(); close(); }
+  });
+  document.addEventListener('mousedown', e => {
+    if (!visible) return;
+    if (palette.contains(e.target)) return;
+    close();
+  });
+  // Global hotkey
+  document.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      if (visible) close(); else open();
+    }
+  });
+}
+
+// (escapeHtml is imported from ./utils.js at the top of this module — reused
+//  here by setupCommandPalette to escape command labels.)
+
 // ----- Page-level marquee (visual only — no actual selection) -----
 // Click-and-drag on empty page background draws the classic desktop rubber
 // band. `pointer-events: none` on the rect means it never blocks anything;
@@ -1790,6 +2310,10 @@ function setupPageMarquee() {
   bindTheme();
   setupPageMarquee();
   renderQuickAccess();
+  setupPresetIO();
+  setupZOrderPopover();
+  setupFontUpload();
+  setupCommandPalette();
   // Browser connectivity status — sets body.is-offline so any widget that
   // exposes a generic "offline" affordance picks it up, regardless of
   // whether a per-widget fetch has failed yet.

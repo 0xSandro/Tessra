@@ -147,6 +147,15 @@ register({
 
     function fire(alarm) {
       if (settings.soundEnabled) beep();
+      // OS-level notification when the tab isn't focused. main.js exposes
+      // a helper that auto-requests permission on first use and silently
+      // falls back to in-page flash if denied or unsupported.
+      if (typeof window.notifyIfBackground === 'function') {
+        window.notifyIfBackground(
+          alarm.label ? `⏰ ${alarm.label}` : '⏰ Alarm',
+          `Tessra alarm fired at ${alarm.time}`
+        );
+      }
       // Visual: flash overlay 1.2s
       flashEl.hidden = false;
       flashEl.textContent = alarm.label ? `⏰ ${alarm.label}` : '⏰ Alarm';

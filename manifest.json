@@ -18,6 +18,7 @@
     "bookmarks",
     "sessions",
     "topSites",
+    "notifications",
     "https://api.open-meteo.com/*",
     "https://geocoding-api.open-meteo.com/*",
     "https://api.coingecko.com/*",
