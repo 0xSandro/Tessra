@@ -27,7 +27,10 @@
     "https://github-contributions-api.jogruber.de/*",
     "https://widgets.coingecko.com/*",
     "https://www.coingecko.com/*",
-    "https://speed.cloudflare.com/*"
+    "https://speed.cloudflare.com/*",
+    "https://air-quality-api.open-meteo.com/*",
+    "https://api.wheretheiss.at/*",
+    "https://en.wikipedia.org/*"
   ],
   "content_security_policy": "script-src 'self' https://widgets.coingecko.com; object-src 'self';",
   "browser_specific_settings": {

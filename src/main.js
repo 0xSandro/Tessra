@@ -180,6 +180,8 @@ function migrate(s) {
     } else if (!w.settings) {
       w.settings = {};
     }
+    // Coerce locked flag — legacy payloads never set it
+    w.locked = !!w.locked;
   });
   s.theme = Object.assign(defaultTheme(), s.theme || {});
   // Favorites is a list of widget type IDs the user pinned to the top of
@@ -234,6 +236,112 @@ function setInteracting(on) {
   }
 }
 
+// ----- Multi-select state -----
+// In-memory only — selection doesn't persist across reloads. A page-marquee
+// drag that ends with a non-trivial rectangle commits the selection; a click
+// on empty page (zero-area marquee) clears it. Dragging a selected widget
+// moves the whole group; the Delete key removes them all.
+let selectedIds = new Set();
+
+function setSelection(ids) {
+  selectedIds = new Set(ids);
+  document.querySelectorAll('.widget').forEach(node => {
+    node.classList.toggle('selected', selectedIds.has(node.dataset.id));
+  });
+}
+function clearSelection() { setSelection([]); }
+
+// ----- Snap-guide helpers -----
+// Figma/Keynote-style alignment guides. While a widget is dragged we test
+// its edges (left/right/centerX/top/bottom/centerY) against every other
+// widget's edges and the viewport midlines. When the closest candidate per
+// axis is within SNAP px, we snap to it and draw a pink dashed line spanning
+// from the dragged widget to the matched reference, so the user can SEE the
+// alignment, not just feel it.
+const SNAP_PX = 6;
+const snapGuidesEl = () => document.getElementById('snap-guides');
+
+function clearSnapGuides() {
+  const el = snapGuidesEl();
+  if (el) el.innerHTML = '';
+}
+
+function renderSnapGuides(g) {
+  const el = snapGuidesEl();
+  if (!el) return;
+  let html = '';
+  if (g.x != null) {
+    html += `<line x1="${g.x.at}" y1="${g.x.y0}" x2="${g.x.at}" y2="${g.x.y1}" class="snap-line"/>`;
+  }
+  if (g.y != null) {
+    html += `<line x1="${g.y.x0}" y1="${g.y.at}" x2="${g.y.x1}" y2="${g.y.at}" class="snap-line"/>`;
+  }
+  el.innerHTML = html;
+}
+
+// Given a tentative dragged rect (page coords), the list of "other" widget
+// rects, and viewport dims — compute the best X and Y snap candidates within
+// SNAP_PX. Returns deltas to add to the dragged rect's left/top, plus the
+// guide-line endpoints to draw.
+function computeSnap(d, others, vw, vh) {
+  // d: { left, top, right, bottom, w, h, cx, cy }
+  // Candidates: each is { axis, delta, at, span0, span1 }
+  let bestX = null, bestY = null;
+
+  const considerX = (target, dragEdge, oTop, oBot) => {
+    const delta = target - dragEdge;
+    if (Math.abs(delta) > SNAP_PX) return;
+    const y0 = Math.min(d.top + delta, oTop);
+    const y1 = Math.max(d.bottom + delta, oBot);
+    if (!bestX || Math.abs(delta) < Math.abs(bestX.delta)) {
+      bestX = { delta, at: target, y0, y1 };
+    }
+  };
+  const considerY = (target, dragEdge, oLeft, oRight) => {
+    const delta = target - dragEdge;
+    if (Math.abs(delta) > SNAP_PX) return;
+    const x0 = Math.min(d.left + delta, oLeft);
+    const x1 = Math.max(d.right + delta, oRight);
+    if (!bestY || Math.abs(delta) < Math.abs(bestY.delta)) {
+      bestY = { delta, at: target, x0, x1 };
+    }
+  };
+
+  // Other widgets — each contributes left/right/centerX targets (X) and
+  // top/bottom/centerY targets (Y). Each gets matched against the dragged
+  // widget's three corresponding edges.
+  for (const o of others) {
+    const ocx = (o.left + o.right) / 2;
+    const ocy = (o.top + o.bottom) / 2;
+    [o.left, o.right, ocx].forEach(target => {
+      considerX(target, d.left,  o.top, o.bottom);
+      considerX(target, d.right, o.top, o.bottom);
+      considerX(target, d.cx,    o.top, o.bottom);
+    });
+    [o.top, o.bottom, ocy].forEach(target => {
+      considerY(target, d.top,    o.left, o.right);
+      considerY(target, d.bottom, o.left, o.right);
+      considerY(target, d.cy,     o.left, o.right);
+    });
+  }
+
+  // Viewport midlines — draw a full-screen guide
+  considerX(vw / 2, d.cx, 0, vh);
+  considerY(vh / 2, d.cy, 0, vw);
+
+  return { bestX, bestY };
+}
+
+// Build an AABB rect record for a widget (page coords).
+function rectFor(w) {
+  return {
+    left: w.x, top: w.y,
+    right: w.x + w.w, bottom: w.y + w.h,
+    w: w.w, h: w.h,
+    cx: w.x + w.w / 2, cy: w.y + w.h / 2
+  };
+}
+
 // JSON-safe snapshot. Strips runtime fields (DOM refs, cleanup arrays, etc.)
 function serialize() {
   return {
@@ -243,6 +351,7 @@ function serialize() {
       x: w.x, y: w.y, w: w.w, h: w.h,
       z: w.z || 0,
       title: w.title || undefined,
+      locked: w.locked ? true : undefined,
       data:     w.data     ? JSON.parse(JSON.stringify(w.data))     : undefined,
       settings: w.settings ? JSON.parse(JSON.stringify(w.settings)) : undefined
     })),
@@ -340,7 +449,12 @@ function renderWidget(w) {
       settings:  w.settings,
       save:      scheduleSave,
       onCleanup: fn => cleanups.push(fn),
-      rerender
+      rerender,
+      // Mark the widget as displaying cached/stale data — the widget's render
+      // function should call this when a fetch failed but cached data is
+      // available. CSS adds a small "offline" badge and dims the body so the
+      // user knows what they're seeing isn't live.
+      setStale: (isStale) => { node.classList.toggle('stale', !!isStale); }
     };
     try { def.render(body, ctx); }
     catch (err) {
@@ -367,9 +481,27 @@ function renderWidget(w) {
     });
   }
 
+  // Lock toggle. Persisted on the widget object. CSS handles the icon swap
+  // (open ↔ closed padlock) and gates the resize handle / × button.
+  if (w.locked) node.classList.add('locked');
+  const lockBtn = node.querySelector('.widget-lock');
+  if (lockBtn) {
+    lockBtn.addEventListener('mousedown', e => e.stopPropagation());
+    lockBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      w.locked = !w.locked;
+      node.classList.toggle('locked', !!w.locked);
+      lockBtn.title = w.locked ? 'Unlock' : 'Lock';
+      scheduleSave();
+    });
+    lockBtn.title = w.locked ? 'Unlock' : 'Lock';
+  }
+
   node.querySelector('.widget-remove').addEventListener('click', () => {
+    if (w.locked) return;                          // locked widgets can't be removed
     runCleanups();
     state.widgets = state.widgets.filter(x => x.id !== w.id);
+    selectedIds.delete(w.id);
     node.remove();
     scheduleSave();
   });
@@ -382,12 +514,16 @@ function renderWidget(w) {
 
 function enableDrag(node, w) {
   let startX, startY, ox, oy, dragging = false;
+  // Group offsets: captured at drag-start when this widget is part of a
+  // multi-selection. Each entry { widget, node, dx, dy } encodes the
+  // selected widget's position relative to the actively-dragged one, so on
+  // each move we can keep the group rigid.
+  let groupOffsets = null;
+
   const start = (clientX, clientY, target) => {
+    if (w.locked) return;                          // hard stop — locked widget
     const inEdit = document.body.classList.contains('edit-mode');
     const inWindowMode = document.body.classList.contains('always-headers');
-    // Sticky notes are always free-draggable from their grip strip, even
-    // outside edit mode. They have no window-style header; the grip is
-    // their dedicated drag handle.
     const isSticky = w.type === 'stickies';
     if (!inEdit) {
       if (isSticky) {
@@ -405,20 +541,72 @@ function enableDrag(node, w) {
     node.classList.add('dragging');
     bringToFront(w, node);
     setInteracting(true);
+
+    // Multi-select coordination. If the dragged widget is part of the active
+    // selection, keep that selection and capture relative offsets so the
+    // group moves rigidly. If it isn't, the user grabbed something outside
+    // the box — collapse selection to just this widget for the drag.
+    if (selectedIds.has(w.id) && selectedIds.size > 1) {
+      groupOffsets = [];
+      state.widgets.forEach(other => {
+        if (other.id === w.id || !selectedIds.has(other.id)) return;
+        if (other.locked) return;                 // locked group members hold still
+        const otherNode = document.querySelector(`.widget[data-id="${other.id}"]`);
+        if (otherNode) groupOffsets.push({ widget: other, node: otherNode, dx: other.x - w.x, dy: other.y - w.y });
+      });
+    } else {
+      groupOffsets = null;
+      // Drag a widget that wasn't in the box → drop the box. Feels natural
+      // because the user is clearly working with a single widget now.
+      if (selectedIds.size > 0) clearSelection();
+    }
   };
+
   const move = (clientX, clientY) => {
     if (!dragging) return;
     const nx = snap(ox + (clientX - startX));
     const ny = snap(oy + (clientY - startY));
-    w.x = Math.max(0, nx);
-    w.y = Math.max(0, ny);
-    node.style.left = w.x + 'px';
-    node.style.top  = w.y + 'px';
+
+    // Snap candidates: every other widget (skipping group members so the
+    // moving group doesn't snap to itself) plus the viewport midlines.
+    const skipIds = new Set([w.id]);
+    if (groupOffsets) groupOffsets.forEach(g => skipIds.add(g.widget.id));
+    const others = state.widgets
+      .filter(x => !skipIds.has(x.id))
+      .map(rectFor);
+    const d = {
+      left: nx, top: ny,
+      right: nx + w.w, bottom: ny + w.h,
+      w: w.w, h: w.h,
+      cx: nx + w.w / 2, cy: ny + w.h / 2
+    };
+    const { bestX, bestY } = computeSnap(d, others, window.innerWidth, window.innerHeight);
+
+    const fx = Math.max(0, nx + (bestX ? bestX.delta : 0));
+    const fy = Math.max(0, ny + (bestY ? bestY.delta : 0));
+    w.x = fx; w.y = fy;
+    node.style.left = fx + 'px';
+    node.style.top  = fy + 'px';
+
+    // Group members ride along
+    if (groupOffsets) {
+      groupOffsets.forEach(g => {
+        g.widget.x = Math.max(0, fx + g.dx);
+        g.widget.y = Math.max(0, fy + g.dy);
+        g.node.style.left = g.widget.x + 'px';
+        g.node.style.top  = g.widget.y + 'px';
+      });
+    }
+
+    renderSnapGuides({ x: bestX, y: bestY });
   };
+
   const end = () => {
     if (!dragging) return;
     dragging = false;
+    groupOffsets = null;
     node.classList.remove('dragging');
+    clearSnapGuides();
     setInteracting(false);
     scheduleSave();
   };
@@ -438,6 +626,7 @@ function enableResize(node, w) {
 
   handle.addEventListener('mousedown', e => {
     if (!document.body.classList.contains('edit-mode')) return;
+    if (w.locked) return;                          // hard stop — locked widget
     e.preventDefault();
     e.stopPropagation(); // prevent widget drag from also starting
     resizing = true;
@@ -611,8 +800,33 @@ editBtn.addEventListener('click', () => setEditMode(!document.body.classList.con
 closeBtn.addEventListener('click', () => setEditMode(false));
 document.addEventListener('keydown', e => {
   if (/input|textarea/i.test(e.target.tagName)) return;
+  if (e.target && e.target.isContentEditable) return;
   if (e.key.toLowerCase() === 'e') setEditMode(!document.body.classList.contains('edit-mode'));
-  if (e.key === 'Escape' && document.body.classList.contains('edit-mode')) setEditMode(false);
+  if (e.key === 'Escape') {
+    if (selectedIds.size > 0) { clearSelection(); return; }
+    if (document.body.classList.contains('edit-mode')) setEditMode(false);
+  }
+  // Delete / Backspace removes every selected widget (skipping locked ones).
+  // No-ops if nothing is selected. Single, batched save at the end.
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (!selectedIds.size) return;
+    const toRemove = [];
+    selectedIds.forEach(id => {
+      const w = state.widgets.find(x => x.id === id);
+      if (w && !w.locked) toRemove.push(w);
+    });
+    if (!toRemove.length) return;
+    e.preventDefault();
+    toRemove.forEach(w => {
+      const node = document.querySelector(`.widget[data-id="${w.id}"]`);
+      if (node && node._cleanups) node._cleanups.forEach(fn => { try { fn(); } catch {} });
+      if (node) node.remove();
+    });
+    const removeIds = new Set(toRemove.map(w => w.id));
+    state.widgets = state.widgets.filter(w => !removeIds.has(w.id));
+    clearSelection();
+    scheduleSave();
+  }
 });
 
 panel.querySelectorAll('.panel-tab').forEach(tab => {
@@ -1532,12 +1746,31 @@ function setupPageMarquee() {
     rect.style.width  = w + 'px';
     rect.style.height = h + 'px';
   });
-  window.addEventListener('mouseup', () => {
+  window.addEventListener('mouseup', e => {
     if (!dragging) return;
     dragging = false;
     rect.classList.remove('active');
     document.body.style.userSelect = '';
     setInteracting(false);
+
+    // Selection commit. A zero-area marquee (a plain click on empty page)
+    // clears the selection; anything bigger box-selects every widget whose
+    // AABB intersects the marquee rect.
+    const dx = Math.abs(e.clientX - originX);
+    const dy = Math.abs(e.clientY - originY);
+    if (dx < 3 && dy < 3) {
+      clearSelection();
+      return;
+    }
+    const boardRect = document.getElementById('board').getBoundingClientRect();
+    const mx0 = Math.min(originX, e.clientX) - boardRect.left;
+    const my0 = Math.min(originY, e.clientY) - boardRect.top;
+    const mx1 = Math.max(originX, e.clientX) - boardRect.left;
+    const my1 = Math.max(originY, e.clientY) - boardRect.top;
+    const hits = state.widgets
+      .filter(w => !(w.x + w.w < mx0 || w.x > mx1 || w.y + w.h < my0 || w.y > my1))
+      .map(w => w.id);
+    setSelection(hits);
   });
 }
 
@@ -1557,5 +1790,12 @@ function setupPageMarquee() {
   bindTheme();
   setupPageMarquee();
   renderQuickAccess();
+  // Browser connectivity status — sets body.is-offline so any widget that
+  // exposes a generic "offline" affordance picks it up, regardless of
+  // whether a per-widget fetch has failed yet.
+  const updateOnlineStatus = () => document.body.classList.toggle('is-offline', !navigator.onLine);
+  window.addEventListener('online',  updateOnlineStatus);
+  window.addEventListener('offline', updateOnlineStatus);
+  updateOnlineStatus();
   scheduleSave();
 })();

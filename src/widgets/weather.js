@@ -102,7 +102,9 @@ register({
         setStatus('Set a location in settings');
         return;
       }
-      if (data.error) {
+      // Show error only when we have nothing cached to fall back to;
+      // otherwise we render the cached weather + a "stale" badge via setStale.
+      if (data.error && !data.weather) {
         setStatus(data.error, true);
         return;
       }
@@ -144,6 +146,7 @@ register({
       } else {
         forecastEl.innerHTML = '';
       }
+      ctx.setStale(!!data.error && !!data.weather);
     }
 
     async function refresh() {

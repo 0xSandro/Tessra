@@ -189,6 +189,7 @@ register({
         });
       });
       updatedEl.textContent = data.fetchedAt ? formatAge(data.fetchedAt) : '';
+      ctx.setStale(!!data.error && Array.isArray(data.coins) && data.coins.length > 0);
     }
 
     async function refresh() {

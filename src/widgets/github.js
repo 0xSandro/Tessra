@@ -214,6 +214,7 @@ register({
       paintGrid();
       paintLegend();
       updatedEl.textContent = data.fetchedAt ? formatAge(data.fetchedAt) : '';
+      ctx.setStale(!!data.error && !!data.payload);
     }
 
     async function refresh() {

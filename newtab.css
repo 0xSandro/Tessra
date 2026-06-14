@@ -507,7 +507,52 @@ body.bg-image   {
   flex-direction: column;
   overflow: hidden;
   transition: box-shadow 0.15s ease;
+  /* Entrance animation — runs once when the widget node is appended to the
+     board. On reload all widgets fade-and-scale in instead of snapping. The
+     transform plays on top of the absolute positioning without affecting
+     layout. */
+  animation: widget-enter 0.32s cubic-bezier(0.2, 0.7, 0.3, 1) both;
 }
+@keyframes widget-enter {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .widget { animation: none; }
+}
+
+/* Offline-aware / stale-cache badge. Widgets that fetched successfully at
+   least once will fall back to cached data when the next refresh fails;
+   they call ctx.setStale(true) to flag that state. We dim the body slightly
+   and pin a small red badge in the top-right corner. */
+.widget.stale .widget-body {
+  filter: grayscale(0.35) opacity(0.78);
+  transition: filter 0.18s ease;
+}
+.widget.stale::before {
+  content: 'offline · stale';
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(220, 38, 38, 0.92);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  pointer-events: none;
+  z-index: 6;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.18);
+  /* Keep the badge readable on translucent glass surfaces */
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+/* The window-style header sits behind the badge — bump it down slightly so
+   the title isn't covered up while stale. */
+.widget.stale .widget-header { padding-right: 78px; }
+body.is-offline .widget.stale::before { content: 'offline'; }
 .widget:hover { box-shadow: var(--widget-shadow-hover); }
 .widget.dragging { opacity: 0.85; box-shadow: var(--widget-shadow-hover); cursor: grabbing; }
 
@@ -2273,6 +2318,473 @@ body.dark-mode .sparkline-down { --spark-color: #ef4444; }
   padding: 16px;
   text-align: center;
 }
+
+/* Day/Year Progress */
+.dyp {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 10px;
+  justify-content: center;
+}
+.dyp-row { display: flex; flex-direction: column; gap: 4px; }
+.dyp-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 11px;
+  color: var(--muted);
+}
+.dyp-label { font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+.dyp-pct { font-variant-numeric: tabular-nums; color: var(--fg); font-weight: 600; }
+.dyp-track {
+  height: 6px;
+  background: var(--widget-border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.dyp-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  width: 0%;
+  transition: width 0.6s linear;
+}
+.dyp-rem { font-size: 10px; color: var(--muted); font-style: italic; }
+
+/* Multi-Alarm */
+.alarms { display: flex; flex-direction: column; height: 100%; gap: 8px; position: relative; }
+.alarms-add { display: flex; gap: 6px; flex-shrink: 0; }
+.alarms-time {
+  flex: 0 0 auto;
+  width: 110px;
+  padding: 5px 8px;
+  font-size: 13px;
+  border: 1px solid var(--widget-border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg);
+  font-family: inherit;
+}
+.alarms-label {
+  flex: 1;
+  padding: 5px 8px;
+  font-size: 13px;
+  border: 1px solid var(--widget-border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg);
+  font-family: inherit;
+}
+.alarms-add-btn {
+  flex: 0 0 auto;
+  width: 30px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  font-size: 18px;
+  cursor: pointer;
+  line-height: 1;
+}
+.alarms-add-btn:hover { opacity: 0.9; }
+.alarms-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+}
+.alarms-empty { font-size: 12px; color: var(--muted); font-style: italic; text-align: center; padding: 12px; }
+.alarms-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--widget-border);
+  transition: opacity 0.12s;
+}
+.alarms-item:last-child { border-bottom: none; }
+.alarms-disabled { opacity: 0.5; }
+.alarms-toggle { display: flex; align-items: center; }
+.alarms-info { flex: 1; min-width: 0; }
+.alarms-time-label {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.alarms-name { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.alarms-recur, .alarms-del {
+  background: transparent;
+  border: 1px solid var(--widget-border);
+  border-radius: 4px;
+  color: var(--muted);
+  padding: 2px 6px;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1;
+}
+.alarms-recur.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.alarms-del { border: none; font-size: 16px; padding: 0 6px; }
+.alarms-del:hover { color: #c00; }
+.alarms-flash {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border-radius: var(--widget-radius);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.alarms-flash.alarms-flash-on { opacity: 0.95; animation: alarms-pulse 0.6s ease-out 0s 3; }
+@keyframes alarms-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.04); }
+}
+
+/* Sunset Countdown */
+.sunset {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+}
+.sunset-loc { font-size: 12px; color: var(--muted); font-weight: 500; }
+.sunset-count {
+  font-size: clamp(32px, 9vh, 56px);
+  font-weight: 300;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -1px;
+  line-height: 1;
+}
+.sunset-when { font-size: 13px; color: var(--fg); }
+.sunset-when.sunset-error { color: #c53030; }
+.sunset-rise { font-size: 11px; color: var(--muted); font-style: italic; margin-top: 4px; }
+
+/* Water Tracker */
+.water { display: flex; flex-direction: column; height: 100%; gap: 10px; }
+.water-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13px;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.water-count { font-weight: 600; font-size: 16px; }
+.water-vol { color: var(--muted); font-size: 12px; }
+.water-bar {
+  height: 4px;
+  background: var(--widget-border);
+  border-radius: 999px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.water-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  width: 0%;
+  transition: width 0.18s ease-out;
+}
+.water-glasses {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(36px, 1fr));
+  gap: 6px;
+  align-content: center;
+  min-height: 0;
+}
+.water-glass {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--muted);
+  transition: color 0.15s, transform 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.water-glass:hover { transform: translateY(-1px); }
+.water-glass svg { width: 100%; height: auto; max-height: 44px; }
+.water-glass-full { color: var(--accent); }
+
+/* Reading List */
+.reading { display: flex; flex-direction: column; height: 100%; gap: 8px; }
+.reading-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+.reading-empty { font-size: 12px; color: var(--muted); font-style: italic; padding: 12px; text-align: center; }
+.reading-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--widget-border);
+}
+.reading-item:last-child { border-bottom: none; }
+.reading-read .reading-title { text-decoration: line-through; color: var(--muted); }
+.reading-check { margin-top: 4px; }
+.reading-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.reading-title {
+  font-size: 13px;
+  color: var(--fg);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.reading-title:hover { color: var(--accent); }
+.reading-host {
+  font-size: 10px;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.reading-prog {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+.reading-prog input[type="range"] { flex: 1; }
+.reading-pct { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; width: 32px; text-align: right; }
+.reading-edit, .reading-del {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 13px;
+  line-height: 1;
+}
+.reading-edit:hover { color: var(--fg); }
+.reading-del:hover { color: #c00; }
+.reading-add { flex-shrink: 0; }
+.reading-input {
+  width: 100%;
+  border: none;
+  outline: none;
+  border-bottom: 1px solid var(--widget-border);
+  padding: 4px 2px;
+  font-size: 13px;
+  background: transparent;
+  color: var(--fg);
+  font-family: inherit;
+}
+.reading-input:focus { border-bottom-color: var(--accent); }
+
+/* Air Quality */
+.aq { display: flex; flex-direction: column; height: 100%; gap: 10px; }
+.aq-loc { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+.aq-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--aq-band, #94a3b8) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--aq-band, #94a3b8) 40%, transparent);
+  flex-shrink: 0;
+}
+.aq-aqi {
+  font-size: clamp(34px, 9vh, 56px);
+  font-weight: 300;
+  letter-spacing: -1px;
+  line-height: 1;
+  color: var(--aq-band, var(--fg));
+  font-variant-numeric: tabular-nums;
+}
+.aq-band {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--aq-band, var(--muted));
+  text-align: center;
+}
+.aq-band.aq-error { color: #c53030; }
+.aq-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+}
+.aq-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border: 1px solid var(--widget-border);
+  border-radius: 6px;
+  text-align: center;
+}
+.aq-cell-label { font-size: 10px; color: var(--muted); font-weight: 600; letter-spacing: 0.5px; }
+.aq-cell-val { font-size: 16px; color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.aq-cell-unit { font-size: 9px; color: var(--muted); }
+.aq-updated { font-size: 10px; color: var(--muted); font-style: italic; text-align: right; }
+
+/* Moon Phase */
+.moon {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+}
+.moon-emoji {
+  font-size: clamp(56px, 18vh, 110px);
+  line-height: 1;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.15));
+}
+.moon-label { font-size: 14px; font-weight: 600; color: var(--fg); }
+.moon-illum { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.moon-next {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--widget-border);
+}
+.moon-next-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  padding: 0 8px;
+}
+.moon-next-label { color: var(--muted); }
+.moon-next-val { color: var(--fg); font-weight: 500; }
+
+/* ISS Tracker */
+.iss { display: flex; flex-direction: column; height: 100%; gap: 10px; }
+.iss-status {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+  text-align: center;
+  padding: 4px;
+  border-radius: 6px;
+  background: var(--widget-border);
+  flex-shrink: 0;
+}
+.iss-status.iss-overhead-now {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent);
+}
+.iss-status.iss-error { background: rgba(220,38,38,0.12); color: #c53030; }
+.iss-coords, .iss-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  flex-shrink: 0;
+}
+.iss-coord, .iss-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 4px;
+}
+.iss-coord-label, .iss-stat-label {
+  font-size: 9px;
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.iss-coord-val {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.iss-stat-val {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+.iss-dist {
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+}
+.iss-dist.iss-overhead { color: var(--accent); font-weight: 600; }
+.iss-meta { font-size: 10px; color: var(--muted); font-style: italic; text-align: center; }
+
+/* On This Day */
+.ontd { display: flex; flex-direction: column; height: 100%; gap: 8px; }
+.ontd-date {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+.ontd-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+.ontd-empty { font-size: 12px; color: var(--muted); font-style: italic; text-align: center; padding: 12px; }
+.ontd-empty.ontd-error { color: #c53030; font-style: normal; }
+.ontd-item {
+  display: flex;
+  gap: 10px;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--widget-border);
+  font-size: 12px;
+  align-items: baseline;
+}
+.ontd-item:last-child { border-bottom: none; }
+.ontd-year {
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 48px;
+}
+.ontd-text {
+  flex: 1;
+  color: var(--fg);
+  line-height: 1.4;
+  text-decoration: none;
+}
+a.ontd-text:hover { color: var(--accent); }
+.ontd-meta { font-size: 10px; color: var(--muted); font-style: italic; text-align: right; flex-shrink: 0; }
 
 /* Internet speed widget */
 .netspeed {
@@ -4515,6 +5027,64 @@ body.dark-mode .wheel-rim { stroke: rgba(255,255,255,0.18); }
    bare page background. Visual only (pointer-events: none), so it never
    blocks widget interaction. Lives above widgets so it renders on top,
    below the side panel / edit toggle / popovers (10000+ z-index). */
+/* Snap guides — pink dashed lines shown while a widget is being dragged
+   and one of its edges is within SNAP_PX of a neighbor or viewport midline.
+   Lives above widgets (so guides are visible against any widget background)
+   but below chrome (settings popovers, side panel, edit toggle). */
+#snap-guides {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 9100;
+  overflow: visible;
+}
+#snap-guides .snap-line {
+  stroke: #ec4899;          /* pink-500 — same hue Figma/Keynote use */
+  stroke-width: 1;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Multi-select outline. The accent ring sits OUTSIDE the widget border so it
+   reads as a selection halo rather than disrupting the widget's own chrome. */
+.widget.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Widget lock — header button + locked-state visual cues */
+.widget-lock {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 2px;
+  margin: 0 2px;
+  border-radius: 4px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  order: 2;
+  transition: color 0.12s, background 0.12s;
+}
+.widget-lock:hover { color: var(--fg); background: rgba(0,0,0,0.05); }
+.widget-lock svg { display: block; }
+.widget-lock .widget-lock-closed { display: none; }
+.widget-lock .widget-lock-open   { display: block; }
+.widget.locked .widget-lock .widget-lock-closed { display: block; }
+.widget.locked .widget-lock .widget-lock-open   { display: none; }
+.widget.locked .widget-lock { color: var(--accent); }
+/* Lock button only relevant in edit mode — except for locked widgets, where
+   we keep it visible always so the user can unlock without entering edit. */
+body.edit-mode .widget-lock,
+.widget.locked .widget-lock { display: flex; }
+body.dark-mode .widget-lock:hover { background: rgba(255,255,255,0.08); }
+/* Hide the resize handle on locked widgets, dim the × button. */
+.widget.locked .widget-resize { display: none !important; }
+.widget.locked .widget-remove { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+
 #page-marquee {
   position: fixed;
   pointer-events: none;

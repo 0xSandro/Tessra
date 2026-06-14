@@ -177,6 +177,7 @@ register({
         progEl.textContent = inFlight ? 'Testing…' : '';
       }
       updatedEl.textContent = data.fetchedAt ? formatAge(data.fetchedAt) : 'Never run';
+      ctx.setStale(!!data.error && data.lastMbps != null);
     }
 
     async function runTest() {

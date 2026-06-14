@@ -114,7 +114,9 @@ register({
       if (!settings.location || !settings.location.trim()) {
         paintLoading('Set a location in settings'); return;
       }
-      if (data.error)                         { paintLoading(data.error, true); return; }
+      // Show error only when we have no cached weather to fall back to;
+      // otherwise render the cached payload and let setStale flag it.
+      if (data.error && !data.weather)        { paintLoading(data.error, true); return; }
       if (!data.weather || !data.resolved)    { paintLoading('Loading…');       return; }
 
       const cur = data.weather.current || {};
@@ -265,6 +267,7 @@ register({
       }
 
       root.innerHTML = html;
+      ctx.setStale(!!data.error && !!data.weather);
     }
 
     async function refresh() {

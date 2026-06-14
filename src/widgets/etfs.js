@@ -146,6 +146,7 @@ register({
         });
       });
       updatedEl.textContent = data.fetchedAt ? formatAge(data.fetchedAt) : '';
+      ctx.setStale(!!data.error && Array.isArray(data.quotes) && data.quotes.length > 0);
     }
 
     async function refresh() {

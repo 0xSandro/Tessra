@@ -225,6 +225,7 @@ register({
         });
       });
       updatedEl.textContent = data.fetchedAt ? formatAge(data.fetchedAt) : '';
+      ctx.setStale(!!data.error && Array.isArray(data.markets) && data.markets.length > 0);
     }
 
     async function refresh() {
