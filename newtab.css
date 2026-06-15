@@ -5727,7 +5727,16 @@ body.dark-mode .catalog-search { background: rgba(255,255,255,0.04); }
 .widget-card:hover { background: rgba(0,0,0,0.04); box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
 .widget-card:active { cursor: grabbing; }
 .card-icon { font-size: 22px; color: var(--fg); }
-.card-label { font-size: 12px; color: var(--muted); }
+.card-label {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.2;
+  /* Long widget names like "Day & Year Progress" need to wrap and stay
+     center-aligned across both lines. */
+  word-wrap: break-word;
+  width: 100%;
+}
 
 /* Favorite star — sits in the top-right corner of each catalog card. Empty
    outline by default, filled accent when favorited. Always faintly visible
@@ -6338,6 +6347,63 @@ body.dark-mode .preset-soon { background: rgba(255,255,255,0.08); }
 }
 .btn-subtle:hover { background: rgba(0,0,0,0.06); }
 .btn-subtle.danger { color: #c0392b; }
+
+/* Theme tab select dropdowns (font picker, etc.) — match the panel's input
+   look across all three surface modes. Native <select> renders very
+   differently across OSes, so we restyle it to look like the other panel
+   inputs while keeping the native click-to-open behavior. */
+.theme-select {
+  flex: 1;
+  appearance: none;
+  -webkit-appearance: none;
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 6px 28px 6px 10px;
+  font-size: 12px;
+  color: var(--fg);
+  font-family: inherit;
+  cursor: pointer;
+  /* Chevron drawn as inline SVG via background-image so we don't need an
+     extra element */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-position: right 8px center;
+  background-repeat: no-repeat;
+  background-size: 14px 14px;
+  transition: border-color 0.12s, background-color 0.12s;
+  min-width: 0;
+}
+.theme-select:hover { background-color: rgba(0, 0, 0, 0.05); }
+.theme-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+body.dark-mode .theme-select {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+body.dark-mode .theme-select:hover {
+  background-color: rgba(255, 255, 255, 0.07);
+}
+body.surface-glass .theme-select,
+body.surface-liquid .theme-select {
+  background-color: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(10px) saturate(150%);
+  -webkit-backdrop-filter: blur(10px) saturate(150%);
+  border-color: rgba(0, 0, 0, 0.14);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+body.surface-glass.dark-mode .theme-select,
+body.surface-liquid.dark-mode .theme-select {
+  background-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.22);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d1d5db' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+}
+/* Native option dropdown — on most platforms the OS draws this; on Firefox
+   it inherits from the body font. The blanket body font already applies. */
+.theme-select option {
+  background: var(--panel-bg);
+  color: var(--fg);
+}
 
 .hidden { display: none !important; }
 

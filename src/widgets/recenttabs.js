@@ -33,14 +33,35 @@ register({
     async function load() {
       try {
         const limit = Math.max(1, Math.min(50, +settings.count || 10));
-        const entries = await api.sessions.getRecentlyClosed({ maxResults: limit });
+        // Fetch a larger window than `limit` so we can filter out our own
+        // new-tab pages and internal URLs and still end up with `limit` real
+        // entries to render.
+        const entries = await api.sessions.getRecentlyClosed({ maxResults: Math.max(limit * 2, 30) });
+
+        // The extension's own new-tab page shows up in the closed-tab list
+        // every time a Tessra tab gets closed — it's noisy. Filter by the
+        // current extension's runtime URL prefix.
+        const selfPrefix = (typeof api.runtime?.getURL === 'function')
+          ? api.runtime.getURL('')
+          : null;
+        function isInternalUrl(u) {
+          if (!u) return true;
+          if (selfPrefix && u.startsWith(selfPrefix)) return true;     // our own newtab.html
+          if (/^about:/i.test(u)) return true;                          // about:newtab, about:home, etc.
+          if (/^moz-extension:\/\//i.test(u) && selfPrefix && u.startsWith(selfPrefix)) return true;
+          if (/^chrome:\/\//i.test(u))   return true;
+          return false;
+        }
 
         // Flatten — windows can contain multiple tabs each with its own sessionId
         const tabs = [];
         for (const entry of entries) {
-          if (entry.tab) tabs.push({ tab: entry.tab, fromWindow: false });
-          else if (entry.window && entry.window.tabs) {
-            entry.window.tabs.forEach(t => tabs.push({ tab: t, fromWindow: true, windowSession: entry.window.sessionId }));
+          if (entry.tab) {
+            if (!isInternalUrl(entry.tab.url)) tabs.push({ tab: entry.tab, fromWindow: false });
+          } else if (entry.window && entry.window.tabs) {
+            entry.window.tabs.forEach(t => {
+              if (!isInternalUrl(t.url)) tabs.push({ tab: t, fromWindow: true, windowSession: entry.window.sessionId });
+            });
           }
           if (tabs.length >= limit) break;
         }

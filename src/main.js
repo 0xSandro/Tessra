@@ -255,6 +255,51 @@ async function notifyIfBackground(title, body) {
 // Expose globally so widgets can fire notifications without import gymnastics
 window.notifyIfBackground = notifyIfBackground;
 
+// Auto-arrange. Sort widgets by their current visual order (top-then-left so
+// the rearrangement matches what the user roughly sees), then bin-pack into
+// rows from left to right, wrapping when the next widget would overflow the
+// usable viewport. Each widget keeps its own w/h — only x/y change.
+function autoArrange() {
+  if (!state.widgets.length) return;
+  const PAD     = 40;
+  const GUTTER  = 20;
+  const TOP     = 80;
+  // Leave room on the right for the (open) side panel; otherwise use the
+  // full viewport. The button lives in the panel so it's likely open.
+  const panelOpen = document.body.classList.contains('edit-mode');
+  const usableW = (window.innerWidth - (panelOpen ? 340 : 0)) - PAD;
+
+  const ordered = state.widgets.slice().sort((a, b) => {
+    // Treat positions within 30 px of each other as "same row"
+    if (Math.abs((a.y || 0) - (b.y || 0)) > 30) return (a.y || 0) - (b.y || 0);
+    return (a.x || 0) - (b.x || 0);
+  });
+
+  let cx = PAD, cy = TOP, rowH = 0;
+  ordered.forEach(w => {
+    if (cx + w.w > usableW && cx > PAD) {
+      // wrap to next row
+      cx = PAD;
+      cy += rowH + GUTTER;
+      rowH = 0;
+    }
+    w.x = cx;
+    w.y = cy;
+    cx += w.w + GUTTER;
+    if (w.h > rowH) rowH = w.h;
+  });
+
+  // Reflect the new positions in the DOM
+  state.widgets.forEach(w => {
+    const n = document.querySelector(`#board .widget[data-id="${w.id}"]`);
+    if (n) {
+      n.style.left = w.x + 'px';
+      n.style.top  = w.y + 'px';
+    }
+  });
+  scheduleSave();
+}
+
 // Reference-counted "user is currently dragging/resizing something" flag.
 // Glass/liquid mode pays a large per-frame cost for backdrop-filter blur;
 // while the user is interacting we strip those filters via CSS and add a
@@ -1906,6 +1951,8 @@ function setupPresetIO() {
   });
   if (shareCopyBtn) shareCopyBtn.addEventListener('click', copyShareString);
   if (sharePasteBtn) sharePasteBtn.addEventListener('click', pasteShareString);
+  const arrangeBtn = document.getElementById('layout-arrange');
+  if (arrangeBtn) arrangeBtn.addEventListener('click', autoArrange);
 }
 
 // ----- Shareable layout strings -----
@@ -2098,6 +2145,7 @@ function setupFontUpload() {
 function buildCommandList() {
   const cmds = [];
   cmds.push(
+    { id: 'auto-arrange', label: 'Auto-arrange widgets into a grid',  hint: '',      run: () => autoArrange() },
     { id: 'edit-toggle',  label: 'Toggle edit mode',                  hint: 'E',     run: () => setEditMode(!document.body.classList.contains('edit-mode')) },
     { id: 'dark-toggle',  label: 'Toggle dark mode',                  hint: '',      run: () => { state.theme.darkMode = !state.theme.darkMode; applyTheme(); const dm = document.getElementById('darkMode'); if (dm) dm.checked = !!state.theme.darkMode; scheduleSave(); } },
     { id: 'theme-reset',  label: 'Reset theme to defaults',           hint: '',      run: () => { Object.assign(state.theme, defaultTheme()); applyTheme(); scheduleSave(); window.location.reload(); } },
