@@ -12,6 +12,47 @@
        with another widget's edge or the viewport midlines. -->
   <svg id="snap-guides" aria-hidden="true"></svg>
 
+  <!-- First-launch onboarding choice -->
+  <div id="onboarding-modal" class="hidden" role="dialog" aria-label="Welcome to Tessra">
+    <div class="ob-backdrop"></div>
+    <div class="ob-card">
+      <div class="ob-logo">
+        <svg viewBox="0 0 24 24" width="32" height="32" aria-hidden="true">
+          <rect x="3" y="3"  width="8" height="8"  rx="1.5" fill="currentColor"/>
+          <rect x="13" y="3"  width="8" height="4"  rx="1.5" fill="currentColor"/>
+          <rect x="13" y="9"  width="8" height="8"  rx="1.5" fill="currentColor"/>
+          <rect x="3" y="13" width="8" height="8"  rx="1.5" fill="currentColor"/>
+          <rect x="13" y="19" width="8" height="2"  rx="1"   fill="currentColor" opacity="0.5"/>
+        </svg>
+      </div>
+      <h2>Welcome to Tessra</h2>
+      <p>A customizable new-tab page. How do you want to start?</p>
+      <div class="ob-actions">
+        <button id="ob-guided" class="ob-btn ob-primary">Guided tour</button>
+        <button id="ob-manual" class="ob-btn">I know what I'm doing</button>
+      </div>
+      <p class="ob-hint">You can press <kbd>Esc</kbd> any time during the tour to skip.</p>
+    </div>
+  </div>
+
+  <!-- Tour balloon — floats and points at UI elements. The spotlight is a
+       single box whose huge box-shadow dims the entire page EXCEPT the
+       rectangle it occupies — so the element being explained stays bright. -->
+  <div id="onboarding-tour" class="hidden" role="dialog" aria-label="Guided tour">
+    <div class="tour-spotlight"></div>
+    <div class="tour-balloon">
+      <div class="tour-arrow"></div>
+      <div class="tour-text"></div>
+      <div class="tour-choices"></div>
+      <div class="tour-foot">
+        <span class="tour-counter"></span>
+        <span class="tour-spacer"></span>
+        <button class="tour-skip">Skip tour</button>
+        <button class="tour-next">Next</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Z-order popover anchored to a widget's stacking button -->
   <div id="zorder-popover" class="hidden" role="menu" aria-label="Layer order">
     <button class="zorder-item" data-action="front">Bring to front</button>

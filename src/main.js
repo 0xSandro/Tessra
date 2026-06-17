@@ -109,7 +109,7 @@ function defaultState() {
     makeWidget('todo',  { x: 520, y: 180, z: 4 }),
     makeWidget('notes', { x: 860, y: 180, z: 5, title: 'Notes 1' })
   ];
-  return { maxZ: widgets.length, widgets, theme: defaultTheme(), favorites: [], quickSpawn: ['stickies'] };
+  return { maxZ: widgets.length, widgets, theme: defaultTheme(), favorites: [], quickSpawn: ['stickies'], onboardingComplete: false };
 }
 
 // ----- Migration -----
@@ -201,6 +201,10 @@ function migrate(s) {
   s.quickSpawn = Array.isArray(s.quickSpawn)
     ? s.quickSpawn.filter(t => registry.has(t))
     : (registry.has('stickies') ? ['stickies'] : []);
+  // Existing users (any saved state already present) have implicitly seen the
+  // app — don't surprise them with a tour. Only fresh installs (defaultState
+  // returning false) get to see it.
+  if (s.onboardingComplete === undefined) s.onboardingComplete = true;
   // Normalize z-order on load: renumber widgets 1..N by their existing z
   // (preserves stacking order). Keeps maxZ small so it can never out-stack
   // chrome layers like the side panel or settings popover.
@@ -439,7 +443,9 @@ function serialize() {
     })),
     theme: state.theme ? JSON.parse(JSON.stringify(state.theme)) : null,
     favorites:  Array.isArray(state.favorites)  ? state.favorites.slice()  : [],
-    quickSpawn: Array.isArray(state.quickSpawn) ? state.quickSpawn.slice() : []
+    quickSpawn: Array.isArray(state.quickSpawn) ? state.quickSpawn.slice() : [],
+    onboardingComplete: state.onboardingComplete !== false  // default true if not explicitly false
+
   };
 }
 
@@ -986,6 +992,8 @@ function dropGhost(e) {
   state.widgets.push(w);
   renderWidget(w);
   saveNow();
+  // Emit so the onboarding tour (and any other listener) can react.
+  document.dispatchEvent(new CustomEvent('tessra:widget-spawned', { detail: { type } }));
 }
 window.addEventListener('mousemove', moveGhost);
 window.addEventListener('mouseup', dropGhost);
@@ -1775,6 +1783,7 @@ function spawnWidget(type) {
   state.widgets.push(widget);
   renderWidget(widget);
   scheduleSave();
+  document.dispatchEvent(new CustomEvent('tessra:widget-spawned', { detail: { type } }));
 }
 
 function toggleQuickAccess(type) {
@@ -2275,6 +2284,326 @@ function setupCommandPalette() {
 // (escapeHtml is imported from ./utils.js at the top of this module — reused
 //  here by setupCommandPalette to escape command labels.)
 
+// ----- Onboarding -----
+// First-launch flow. The user picks between "I know what I'm doing" (skip
+// everything) or "Guided tour" (5 short bubble steps pointing at the most
+// important UI elements). Either path marks onboardingComplete and persists
+// it so the modal never reappears. Existing users (whose state already has
+// other fields) get auto-skipped via migrate() defaulting the flag to true.
+
+const TOUR_STEPS = [
+  {
+    target: () => document.getElementById('edit-toggle'),
+    placement: 'bottom',
+    html: 'Click <strong>Edit</strong> (top-right) to open the side panel with widgets and theme controls. Press <kbd>E</kbd> anywhere to toggle it.',
+    before: () => setEditMode(false),
+    // Auto-advance the moment they click the Edit button — no need to also
+    // press Next.
+    advanceOn: { event: 'click', selector: '#edit-toggle' }
+  },
+  {
+    target: () => document.querySelector('#side-panel .panel-tab[data-tab="widgets"]'),
+    placement: 'left',
+    html: 'The <strong>Widgets</strong> tab lists everything you can add, grouped by category. <strong>Drag a card onto the page</strong> to place a widget.',
+    before: () => { setEditMode(true); selectPanelTab('widgets'); },
+    // Dispatched by dropGhost when a widget is successfully spawned from
+    // the catalog — advances automatically as soon as the user drops one.
+    advanceOn: { event: 'tessra:widget-spawned' }
+  },
+  {
+    target: () => document.getElementById('quick-access'),
+    placement: 'left',
+    html: 'Under the Edit button sits the <strong>quick-access toolbar</strong>. One click spawns the pinned widget. The <strong>+</strong> button lets you pin more.',
+    before: () => setEditMode(false)
+  },
+  {
+    target: null,
+    placement: 'center',
+    html: 'Press <kbd>⌘K</kbd> (or <kbd>Ctrl+K</kbd>) anywhere to open the <strong>command palette</strong> — fuzzy-search every widget and action in one place.'
+  },
+  {
+    target: null,
+    placement: 'center',
+    html: 'Almost done. Pick a starting theme:',
+    choices: [
+      { label: '☀ Light', run: () => { state.theme.darkMode = false; applyTheme(); } },
+      { label: '☾ Dark',  run: () => { state.theme.darkMode = true;  applyTheme(); } }
+    ],
+    // Don't finish the tour after this choice — go on to the surface step
+    choiceAdvances: true
+  },
+  {
+    target: null,
+    placement: 'center',
+    html: 'And how should widgets look? Pick a <strong>surface style</strong> (you can change it later in the Theme tab):',
+    customRender: (textEl, choicesEl, finish) => {
+      choicesEl.innerHTML = `
+        <div class="tour-surface-grid">
+          ${['flat','glass','liquid'].map(v => `
+            <button class="tour-surface" data-value="${v}">
+              <div class="ts-mock ts-mock-${v}">
+                <div class="ts-rect ts-rect-a"></div>
+                <div class="ts-rect ts-rect-b"></div>
+              </div>
+              <span class="ts-label">${v.charAt(0).toUpperCase()}${v.slice(1)}</span>
+            </button>`).join('')}
+        </div>`;
+      choicesEl.querySelectorAll('.tour-surface').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.theme.surfaceStyle = btn.dataset.value;
+          applyTheme();
+          finish();
+        });
+      });
+    }
+  }
+];
+
+function selectPanelTab(name) {
+  const panel = document.getElementById('side-panel');
+  if (!panel) return;
+  panel.querySelectorAll('.panel-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  panel.querySelectorAll('.panel-pane').forEach(p => p.classList.toggle('hidden', p.dataset.pane !== name));
+}
+
+function finishOnboarding() {
+  document.getElementById('onboarding-modal')?.classList.add('hidden');
+  document.getElementById('onboarding-tour')?.classList.add('hidden');
+  if (state && state.onboardingComplete !== true) {
+    state.onboardingComplete = true;
+    saveNow();
+  }
+}
+
+function positionBalloon(balloon, target, placement) {
+  const arrow = balloon.querySelector('.tour-arrow');
+  // Reset arrow position so previous step's inline overrides don't leak
+  if (arrow) { arrow.style.left = ''; arrow.style.top = ''; arrow.style.marginLeft = ''; arrow.style.marginTop = ''; }
+
+  // Hide while we measure so the user doesn't see the balloon flash at its
+  // pre-measurement coords (was previously appearing at top-left for one
+  // frame before snapping into place).
+  balloon.style.visibility = 'hidden';
+
+  if (!target || placement === 'center') {
+    balloon.dataset.placement = 'center';
+    balloon.style.left = '50%';
+    balloon.style.top  = '40%';
+    balloon.style.transform = 'translate(-50%, -50%)';
+    balloon.style.visibility = 'visible';
+    return;
+  }
+  balloon.style.transform = '';
+  balloon.dataset.placement = placement;
+  const tr = target.getBoundingClientRect();
+  const bw = balloon.offsetWidth;
+  const bh = balloon.offsetHeight;
+  const gap = 14;
+  let left = 0, top = 0;
+  if (placement === 'bottom') {
+    left = tr.left + tr.width / 2 - bw / 2;
+    top  = tr.bottom + gap;
+  } else if (placement === 'top') {
+    left = tr.left + tr.width / 2 - bw / 2;
+    top  = tr.top - bh - gap;
+  } else if (placement === 'left') {
+    left = tr.left - bw - gap;
+    top  = tr.top + tr.height / 2 - bh / 2;
+  } else if (placement === 'right') {
+    left = tr.right + gap;
+    top  = tr.top + tr.height / 2 - bh / 2;
+  }
+  // Clamp to viewport with 8 px gutter
+  const M = 8;
+  left = Math.max(M, Math.min(window.innerWidth  - bw - M, left));
+  top  = Math.max(M, Math.min(window.innerHeight - bh - M, top));
+  balloon.style.left = left + 'px';
+  balloon.style.top  = top  + 'px';
+
+  // After clamping, the balloon may have slid sideways to fit the viewport
+  // (especially under right-edge anchors like the Edit button). The arrow
+  // would then no longer line up with the target — re-pin it to the target
+  // center, expressed relative to the balloon's final position.
+  if (arrow) {
+    const targetCx = tr.left + tr.width / 2;
+    const targetCy = tr.top  + tr.height / 2;
+    const ARROW_INSET = 14;   // keep arrow off the very corners
+    if (placement === 'bottom' || placement === 'top') {
+      let ax = targetCx - left;
+      ax = Math.max(ARROW_INSET, Math.min(bw - ARROW_INSET, ax));
+      arrow.style.left = ax + 'px';
+      arrow.style.marginLeft = '-6px';
+    } else if (placement === 'left' || placement === 'right') {
+      let ay = targetCy - top;
+      ay = Math.max(ARROW_INSET, Math.min(bh - ARROW_INSET, ay));
+      arrow.style.top = ay + 'px';
+      arrow.style.marginTop = '-6px';
+    }
+  }
+  balloon.style.visibility = 'visible';
+}
+
+// Spotlight cutout — wraps around the target so the dim doesn't cover the
+// thing being explained. When target is null, collapses to zero-size at the
+// viewport center so the box-shadow uniformly dims everything.
+function positionSpotlight(spotlight, target) {
+  if (!spotlight) return;
+  if (!target) {
+    // Zero-size at the screen center — shadow covers everything, no cutout
+    spotlight.style.left = '50%';
+    spotlight.style.top  = '50%';
+    spotlight.style.width = '0px';
+    spotlight.style.height = '0px';
+    return;
+  }
+  const PAD = 6;
+  const r = target.getBoundingClientRect();
+  spotlight.style.left   = (r.left - PAD) + 'px';
+  spotlight.style.top    = (r.top  - PAD) + 'px';
+  spotlight.style.width  = (r.width  + PAD * 2) + 'px';
+  spotlight.style.height = (r.height + PAD * 2) + 'px';
+}
+
+function startGuidedTour() {
+  const tour = document.getElementById('onboarding-tour');
+  if (!tour) { finishOnboarding(); return; }
+  document.getElementById('onboarding-modal')?.classList.add('hidden');
+  tour.classList.remove('hidden');
+
+  const balloon   = tour.querySelector('.tour-balloon');
+  const spotlight = tour.querySelector('.tour-spotlight');
+  const textEl    = tour.querySelector('.tour-text');
+  const choicesEl = tour.querySelector('.tour-choices');
+  const counter   = tour.querySelector('.tour-counter');
+  const nextBtn   = tour.querySelector('.tour-next');
+  const skipBtn   = tour.querySelector('.tour-skip');
+  let idx = 0;
+  // Per-step auto-advance teardown — removed when the step ends so a Next
+  // click that follows a click on the target doesn't re-fire.
+  let stepCleanup = null;
+
+  function advance() {
+    if (stepCleanup) { stepCleanup(); stepCleanup = null; }
+    idx++;
+    if (idx >= TOUR_STEPS.length) { cleanup(); finishOnboarding(); return; }
+    show(idx);
+  }
+
+  async function show(i) {
+    const step = TOUR_STEPS[i];
+    if (!step) { finishOnboarding(); return; }
+    if (typeof step.before === 'function') {
+      try { step.before(); } catch (e) { console.warn('[Tessra tour]', e); }
+      await new Promise(r => setTimeout(r, 280)); // wait for the panel transition
+    }
+    textEl.innerHTML = step.html;
+    counter.textContent = `${i + 1} / ${TOUR_STEPS.length}`;
+
+    // Inline choices replace the Next button on relevant steps. Custom
+    // renderers get full control over the choices area; plain choices use
+    // simple label buttons that finish (or advance) on click.
+    choicesEl.innerHTML = '';
+    if (typeof step.customRender === 'function') {
+      step.customRender(textEl, choicesEl, () => {
+        // The custom render's finish callback should end the tour entirely
+        cleanup();
+        finishOnboarding();
+      });
+      choicesEl.style.display = '';
+      nextBtn.style.display = 'none';
+    } else if (Array.isArray(step.choices) && step.choices.length) {
+      const isLastStep = i === TOUR_STEPS.length - 1;
+      step.choices.forEach(opt => {
+        const b = document.createElement('button');
+        b.className = 'tour-choice';
+        b.textContent = opt.label;
+        b.addEventListener('click', () => {
+          try { opt.run(); } catch (e) { console.warn('[Tessra tour]', e); }
+          if (step.choiceAdvances && !isLastStep) {
+            advance();
+          } else {
+            cleanup();
+            finishOnboarding();
+          }
+        });
+        choicesEl.appendChild(b);
+      });
+      choicesEl.style.display = '';
+      nextBtn.style.display = 'none';
+    } else {
+      choicesEl.style.display = 'none';
+      nextBtn.style.display = '';
+      nextBtn.textContent = i === TOUR_STEPS.length - 1 ? 'Finish' : 'Next';
+    }
+
+    const target = typeof step.target === 'function' ? step.target() : null;
+    // Position spotlight first, then balloon — so the balloon's measurement
+    // happens after the spotlight is in its final spot (no layout cascade).
+    positionSpotlight(spotlight, target);
+    positionBalloon(balloon, target, step.placement || 'bottom');
+
+    // Auto-advance listener — fires once when the configured event matches.
+    // Removed by stepCleanup() whenever the step ends (manual Next, choice
+    // click, finish, or skip), so we never re-fire across steps.
+    if (step.advanceOn) {
+      const { event, selector } = step.advanceOn;
+      const handler = e => {
+        if (selector && !(e.target && e.target.closest && e.target.closest(selector))) return;
+        // Small delay so the click's own action (e.g. opening the panel)
+        // completes before the next step's before() runs.
+        setTimeout(() => advance(), 150);
+        document.removeEventListener(event, handler, true);
+      };
+      document.addEventListener(event, handler, true);
+      stepCleanup = () => document.removeEventListener(event, handler, true);
+    }
+  }
+
+  const escHandler = e => {
+    if (e.key === 'Escape') { e.preventDefault(); cleanup(); finishOnboarding(); }
+  };
+  const resizeHandler = () => {
+    const step = TOUR_STEPS[idx];
+    const target = step && typeof step.target === 'function' ? step.target() : null;
+    positionSpotlight(spotlight, target);
+    positionBalloon(balloon, target, step?.placement || 'bottom');
+  };
+  function cleanup() {
+    if (stepCleanup) { stepCleanup(); stepCleanup = null; }
+    document.removeEventListener('keydown', escHandler);
+    window.removeEventListener('resize', resizeHandler);
+  }
+  document.addEventListener('keydown', escHandler);
+  window.addEventListener('resize', resizeHandler);
+
+  nextBtn.onclick = () => advance();
+  skipBtn.onclick = () => { cleanup(); finishOnboarding(); };
+
+  show(0);
+}
+
+function setupOnboarding() {
+  if (!state || state.onboardingComplete) return;
+  const modal = document.getElementById('onboarding-modal');
+  if (!modal) return;
+  const guidedBtn = document.getElementById('ob-guided');
+  const manualBtn = document.getElementById('ob-manual');
+  // Defer a beat so widgets render first — the choice card on top of a
+  // half-rendered board feels jarring otherwise.
+  setTimeout(() => modal.classList.remove('hidden'), 450);
+  if (guidedBtn) guidedBtn.addEventListener('click', startGuidedTour);
+  if (manualBtn) manualBtn.addEventListener('click', finishOnboarding);
+  // Esc on the modal also dismisses (counts as manual setup)
+  const escHandler = e => {
+    if (e.key !== 'Escape') return;
+    if (modal.classList.contains('hidden')) return;
+    e.preventDefault();
+    finishOnboarding();
+    document.removeEventListener('keydown', escHandler);
+  };
+  document.addEventListener('keydown', escHandler);
+}
+
 // ----- Page-level marquee (visual only — no actual selection) -----
 // Click-and-drag on empty page background draws the classic desktop rubber
 // band. `pointer-events: none` on the rect means it never blocks anything;
@@ -2362,6 +2691,7 @@ function setupPageMarquee() {
   setupZOrderPopover();
   setupFontUpload();
   setupCommandPalette();
+  setupOnboarding();
   // Browser connectivity status — sets body.is-offline so any widget that
   // exposes a generic "offline" affordance picks it up, regardless of
   // whether a per-widget fetch has failed yet.

@@ -512,11 +512,16 @@ body.bg-image   {
      board. On reload all widgets fade-and-scale in instead of snapping. The
      transform plays on top of the absolute positioning without affecting
      layout. */
-  animation: widget-enter 0.32s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  animation: widget-enter 0.28s ease-out;
 }
+/* Fade-only entrance — no transform. Earlier we used scale(0.96)→scale(1),
+   but `transform` on .widget creates a stacking context that can interfere
+   with iframes and the precise sizing of children that some widgets rely
+   on (crypto chart, advanced weather hourly strip, etc.). Opacity-only
+   keeps the soft fade-in without that side effect. */
 @keyframes widget-enter {
-  from { opacity: 0; transform: scale(0.96); }
-  to   { opacity: 1; transform: scale(1); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
   .widget { animation: none; }
@@ -1261,17 +1266,28 @@ body.dark-mode .wf-preview { background: rgba(255,255,255,0.04); }
 .wf-preview .vert-lbl { font-size: 6px; letter-spacing: 0.8px; }
 
 /* Search */
+/* Search widget body centers the pill vertically — the widget body grew
+   taller (default 110 px) and the pill was stretching to fill it, becoming
+   a weirdly elongated capsule. Cap the pill height and let the surrounding
+   body center it instead. */
+.widget[data-type="search"] > .widget-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .search-form {
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 100%;
   width: 100%;
-  padding: 6px 16px;
+  height: auto;
+  max-height: 50px;
+  padding: 10px 16px;
   background: rgba(0,0,0,0.03);
   border: 1px solid var(--widget-border);
   border-radius: 999px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  box-sizing: border-box;
   transition: border-color 0.15s, box-shadow 0.15s, background 0.12s;
 }
 .search-form:focus-within {
@@ -2325,19 +2341,29 @@ body.dark-mode .sparkline-down { --spark-color: #ef4444; }
   display: flex;
   flex-direction: column;
   height: 100%;
-  gap: 10px;
+  gap: 14px;
   justify-content: center;
+  padding: 4px 2px;
+  box-sizing: border-box;
 }
-.dyp-row { display: flex; flex-direction: column; gap: 4px; }
+.dyp-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
 .dyp-head {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   font-size: 11px;
   color: var(--muted);
+  white-space: nowrap;
+  min-width: 0;
+  gap: 8px;
 }
-.dyp-label { font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
-.dyp-pct { font-variant-numeric: tabular-nums; color: var(--fg); font-weight: 600; }
+.dyp-label { font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; flex-shrink: 0; }
+.dyp-pct { font-variant-numeric: tabular-nums; color: var(--fg); font-weight: 600; flex-shrink: 0; }
 .dyp-track {
   height: 6px;
   background: var(--widget-border);
@@ -2464,16 +2490,27 @@ body.dark-mode .sparkline-down { --spark-color: #ef4444; }
   justify-content: center;
   align-items: center;
   text-align: center;
-  gap: 4px;
+  gap: 6px;
+  padding: 8px;
+  box-sizing: border-box;
 }
-.sunset-loc { font-size: 12px; color: var(--muted); font-weight: 500; }
+.sunset-loc {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .sunset-count {
-  font-size: clamp(32px, 9vh, 56px);
+  font-size: clamp(28px, 14%, 48px);
   font-weight: 300;
   color: var(--accent);
   font-variant-numeric: tabular-nums;
   letter-spacing: -1px;
   line-height: 1;
+  white-space: nowrap;
 }
 .sunset-when { font-size: 13px; color: var(--fg); }
 .sunset-when.sunset-error { color: #c53030; }
@@ -2600,21 +2637,28 @@ body.dark-mode .sparkline-down { --spark-color: #ef4444; }
 .reading-input:focus { border-bottom-color: var(--accent); }
 
 /* Air Quality */
-.aq { display: flex; flex-direction: column; height: 100%; gap: 10px; }
-.aq-loc { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+.aq { display: flex; flex-direction: column; height: 100%; gap: 8px; }
+.aq-loc {
+  font-size: 12px;
+  color: var(--muted);
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .aq-hero {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 8px;
+  gap: 2px;
+  padding: 8px 10px;
   border-radius: 10px;
   background: color-mix(in srgb, var(--aq-band, #94a3b8) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--aq-band, #94a3b8) 40%, transparent);
   flex-shrink: 0;
 }
 .aq-aqi {
-  font-size: clamp(34px, 9vh, 56px);
+  font-size: 38px;
   font-weight: 300;
   letter-spacing: -1px;
   line-height: 1;
@@ -4433,10 +4477,11 @@ body.surface-liquid .sticky-textarea {
   flex-direction: column;
   height: 100%;
   width: 100%;
-  padding: 18px;
-  gap: 12px;
+  padding: 14px 16px;
+  gap: 10px;
   overflow-y: auto;
   color: var(--fg);
+  box-sizing: border-box;
   transition: background 0.4s ease;
 }
 .aw-msg {
@@ -4464,15 +4509,15 @@ body.surface-liquid .sticky-textarea {
   padding: 6px 0;
 }
 .aw-icon {
-  font-size: 60px;
+  font-size: 48px;
   line-height: 1;
   flex-shrink: 0;
 }
 .aw-hero-info { flex: 1; min-width: 0; text-align: right; }
 .aw-temp {
-  font-size: 52px;
+  font-size: 42px;
   font-weight: 200;
-  letter-spacing: -2px;
+  letter-spacing: -1.5px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
@@ -5110,6 +5155,342 @@ body.surface-liquid #zorder-popover {
 body.surface-glass.dark-mode #zorder-popover,
 body.surface-liquid.dark-mode #zorder-popover {
   background: rgba(30, 30, 35, calc(var(--glass-alpha) + 0.33));
+}
+
+/* First-launch onboarding modal */
+#onboarding-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: ob-fade 0.25s ease-out;
+}
+@keyframes ob-fade { from { opacity: 0; } to { opacity: 1; } }
+.ob-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 10, 14, 0.45);
+  backdrop-filter: blur(6px) saturate(120%);
+  -webkit-backdrop-filter: blur(6px) saturate(120%);
+}
+.ob-card {
+  position: relative;
+  z-index: 1;
+  width: min(420px, 88vw);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  padding: 28px 28px 22px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.25);
+  text-align: center;
+  animation: ob-rise 0.32s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+@keyframes ob-rise { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+.ob-logo {
+  display: inline-flex;
+  width: 56px;
+  height: 56px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+.ob-card h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--fg);
+  letter-spacing: -0.3px;
+}
+.ob-card p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.ob-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 22px 0 16px;
+}
+.ob-btn {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.03);
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s, transform 0.06s;
+}
+.ob-btn:hover { background: rgba(0, 0, 0, 0.05); }
+.ob-btn:active { transform: translateY(1px); }
+.ob-btn.ob-primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.ob-btn.ob-primary:hover { opacity: 0.92; }
+.ob-hint {
+  font-size: 11px !important;
+  color: var(--muted);
+  margin-top: 4px !important;
+}
+.ob-hint kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.04);
+}
+body.dark-mode .ob-btn { background: rgba(255, 255, 255, 0.05); }
+body.dark-mode .ob-btn:hover { background: rgba(255, 255, 255, 0.08); }
+body.dark-mode .ob-hint kbd { background: rgba(255, 255, 255, 0.08); }
+body.surface-glass .ob-card,
+body.surface-liquid .ob-card {
+  background: rgba(255, 255, 255, calc(var(--glass-alpha) + 0.35));
+  backdrop-filter: blur(calc(var(--glass-blur) + 6px)) saturate(180%);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) + 6px)) saturate(180%);
+}
+body.surface-glass.dark-mode .ob-card,
+body.surface-liquid.dark-mode .ob-card {
+  background: rgba(30, 30, 35, calc(var(--glass-alpha) + 0.4));
+}
+
+/* Tour balloon — floating tooltip with an arrow */
+#onboarding-tour {
+  position: fixed;
+  inset: 0;
+  z-index: 10095;
+  pointer-events: none;
+}
+/* Spotlight cutout — single positioned box whose huge box-shadow paints
+   the dim across the entire page EXCEPT where the box itself sits. That
+   means the element being explained stays bright. When the step has no
+   target the box collapses to 0×0 at screen center and the shadow covers
+   everything uniformly. */
+.tour-spotlight {
+  position: fixed;
+  pointer-events: none;
+  background: transparent;
+  border-radius: 10px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+  transition: top 0.2s ease, left 0.2s ease, width 0.2s ease, height 0.2s ease;
+  z-index: 0;
+  animation: ob-fade 0.22s ease-out;
+}
+.tour-balloon {
+  position: absolute;
+  width: min(320px, 80vw);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 14px 14px 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
+  pointer-events: auto;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--fg);
+  animation: ob-rise 0.18s ease-out;
+  z-index: 1;
+}
+.tour-balloon kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  border: 1px solid var(--panel-border);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.04);
+}
+.tour-text { color: var(--fg); }
+.tour-text strong { color: var(--accent); font-weight: 600; }
+/* Inline choice buttons (used on the final theme step). Two big tappable
+   pills replace the Next button when present. */
+.tour-choices {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.tour-choice {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.03);
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s, border-color 0.12s, transform 0.06s;
+}
+.tour-choice:hover {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.tour-choice:active { transform: translateY(1px); }
+body.dark-mode .tour-choice { background: rgba(255, 255, 255, 0.06); }
+body.dark-mode .tour-choice:hover { background: rgba(255, 255, 255, 0.1); }
+
+/* Surface-style picker — 3 mini mockup tiles. Each tile shows the same two
+   overlapping mini-widget rectangles styled the way that surface mode looks. */
+.tour-surface-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.tour-surface {
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.12s, transform 0.06s;
+}
+.tour-surface:hover { border-color: var(--accent); }
+.tour-surface:active { transform: translateY(1px); }
+.ts-mock {
+  width: 100%;
+  height: 64px;
+  position: relative;
+  background: linear-gradient(135deg, #6c8df0 0%, #c54fa3 100%);
+  overflow: hidden;
+}
+.ts-rect {
+  position: absolute;
+  border-radius: 4px;
+  width: 56%;
+  height: 50%;
+}
+.ts-rect-a { top: 14%; left: 10%; }
+.ts-rect-b { top: 40%; left: 35%; }
+/* Flat */
+.ts-mock-flat .ts-rect { background: #ffffff; border: 1px solid rgba(0,0,0,0.06); }
+.ts-mock-flat .ts-rect-b { background: #f3f4f6; }
+/* Glass — translucent + visible blur */
+.ts-mock-glass .ts-rect {
+  background: rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(8px) saturate(150%);
+  -webkit-backdrop-filter: blur(8px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+}
+/* Liquid — translucent gradient with sheen */
+.ts-mock-liquid .ts-rect {
+  background: linear-gradient(180deg, rgba(255,255,255,0.55), rgba(255,255,255,0.18));
+  backdrop-filter: blur(10px) saturate(180%);
+  -webkit-backdrop-filter: blur(10px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.4) inset;
+}
+.ts-label {
+  display: block;
+  padding: 7px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--fg);
+  background: rgba(0, 0, 0, 0.02);
+}
+body.dark-mode .ts-label { background: rgba(255,255,255,0.04); }
+
+.tour-foot {
+  display: flex;
+  align-items: center;
+  margin-top: 12px;
+  gap: 8px;
+}
+.tour-counter {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.tour-spacer { flex: 1; }
+.tour-skip, .tour-next {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--muted);
+}
+.tour-skip:hover { color: var(--fg); background: rgba(0,0,0,0.04); }
+.tour-next {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.tour-next:hover { opacity: 0.92; }
+body.dark-mode .tour-balloon kbd { background: rgba(255,255,255,0.08); }
+body.dark-mode .tour-skip:hover { background: rgba(255,255,255,0.06); }
+
+/* Arrow (rotated square clipped by missing border) */
+.tour-arrow {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  transform: rotate(45deg);
+  z-index: -1;
+}
+.tour-balloon[data-placement="bottom"] .tour-arrow {
+  top: -7px;
+  left: 50%; margin-left: -6px;
+  border-bottom: none; border-right: none;
+}
+.tour-balloon[data-placement="top"] .tour-arrow {
+  bottom: -7px;
+  left: 50%; margin-left: -6px;
+  border-top: none; border-left: none;
+}
+.tour-balloon[data-placement="left"] .tour-arrow {
+  right: -7px;
+  top: 50%; margin-top: -6px;
+  border-left: none; border-bottom: none;
+}
+.tour-balloon[data-placement="right"] .tour-arrow {
+  left: -7px;
+  top: 50%; margin-top: -6px;
+  border-right: none; border-top: none;
+}
+.tour-balloon[data-placement="center"] .tour-arrow { display: none; }
+
+body.surface-glass .tour-balloon,
+body.surface-liquid .tour-balloon {
+  background: rgba(255, 255, 255, calc(var(--glass-alpha) + 0.35));
+  backdrop-filter: blur(calc(var(--glass-blur) + 6px)) saturate(180%);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) + 6px)) saturate(180%);
+}
+body.surface-glass.dark-mode .tour-balloon,
+body.surface-liquid.dark-mode .tour-balloon {
+  background: rgba(30, 30, 35, calc(var(--glass-alpha) + 0.38));
+}
+body.surface-glass .tour-arrow,
+body.surface-liquid .tour-arrow {
+  background: rgba(255, 255, 255, calc(var(--glass-alpha) + 0.35));
+}
+body.surface-glass.dark-mode .tour-arrow,
+body.surface-liquid.dark-mode .tour-arrow {
+  background: rgba(30, 30, 35, calc(var(--glass-alpha) + 0.38));
 }
 
 /* Command palette ⌘K */
