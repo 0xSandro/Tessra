@@ -902,10 +902,173 @@ function setEditMode(on) {
 }
 editBtn.addEventListener('click', () => setEditMode(!document.body.classList.contains('edit-mode')));
 closeBtn.addEventListener('click', () => setEditMode(false));
+// ----- Copy/paste + duplicate helpers -----
+// Widget JSON envelope used for clipboard transfer. Includes only the fields
+// that travel cleanly across workspaces (positions are *not* preserved —
+// pasted widgets get re-positioned so they don't land on top of the
+// original). data + settings + size + title carry the actual configuration.
+const CLIP_FORMAT = 'tessra-widgets';
+const CLIP_VERSION = 1;
+
+function buildClipboardPayload(widgets) {
+  return {
+    format: CLIP_FORMAT,
+    version: CLIP_VERSION,
+    widgets: widgets.map(w => ({
+      type: w.type,
+      w: w.w, h: w.h,
+      title: w.title || undefined,
+      locked: w.locked ? true : undefined,
+      data:     w.data     ? JSON.parse(JSON.stringify(w.data))     : undefined,
+      settings: w.settings ? JSON.parse(JSON.stringify(w.settings)) : undefined
+    }))
+  };
+}
+
+// Spawn N widgets at a position that doesn't immediately overlap the source.
+// `baseXY` is the first slot — subsequent ones are staggered diagonally so
+// pasting multiple copies of the same widget makes the stack visible.
+function spawnFromClipboardPayload(payload, baseXY) {
+  if (!payload || payload.format !== CLIP_FORMAT || !Array.isArray(payload.widgets)) return [];
+  const STAGGER = 22;
+  const newIds = [];
+  payload.widgets.forEach((src, i) => {
+    const def = registry.get(src.type);
+    if (!def) return;
+    const x = (baseXY?.x ?? 80) + i * STAGGER;
+    const y = (baseXY?.y ?? 100) + i * STAGGER;
+    state.maxZ = (state.maxZ || 0) + 1;
+    const widget = makeWidget(src.type, {
+      x: snap(Math.max(0, x)),
+      y: snap(Math.max(0, y)),
+      w: src.w,
+      h: src.h,
+      z: state.maxZ,
+      data:     src.data     ? JSON.parse(JSON.stringify(src.data))     : undefined,
+      settings: src.settings ? JSON.parse(JSON.stringify(src.settings)) : undefined
+    });
+    if (src.title) widget.title = src.title;
+    else if (def.autoNumber) widget.title = nextAutoTitle(src.type);
+    if (src.locked) widget.locked = true;
+    state.widgets.push(widget);
+    renderWidget(widget);
+    newIds.push(widget.id);
+  });
+  return newIds;
+}
+
+// Duplicate selected widgets in-place (used by Cmd+D). Same as paste but the
+// payload comes from current selection, not the clipboard.
+function duplicateSelected() {
+  if (!selectedIds.size) return;
+  const sources = state.widgets.filter(w => selectedIds.has(w.id));
+  if (!sources.length) return;
+  const payload = buildClipboardPayload(sources);
+  // Place duplicates just below-right of the topmost source
+  const top = Math.min(...sources.map(w => w.y));
+  const left = Math.min(...sources.map(w => w.x));
+  const newIds = spawnFromClipboardPayload(payload, { x: left + 22, y: top + 22 });
+  if (newIds.length) {
+    setSelection(newIds);
+    scheduleSave();
+  }
+}
+
+async function copySelectedToClipboard() {
+  if (!selectedIds.size) return false;
+  // Don't preempt text selection — Cmd+C should still copy highlighted text
+  if (window.getSelection && window.getSelection().toString().trim()) return false;
+  const sources = state.widgets.filter(w => selectedIds.has(w.id));
+  if (!sources.length) return false;
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(buildClipboardPayload(sources)));
+    return true;
+  } catch { return false; }
+}
+
+async function pasteFromClipboard() {
+  let text;
+  try { text = await navigator.clipboard.readText(); }
+  catch { return false; }
+  if (!text) return false;
+  let parsed;
+  try { parsed = JSON.parse(text); }
+  catch { return false; }
+  if (parsed?.format !== CLIP_FORMAT) return false;
+  // Stagger from the viewport's top-left margin so the pasted widget is
+  // clearly visible regardless of where the source was.
+  const newIds = spawnFromClipboardPayload(parsed, { x: 80, y: 100 });
+  if (newIds.length) {
+    setSelection(newIds);
+    scheduleSave();
+    return true;
+  }
+  return false;
+}
+
 document.addEventListener('keydown', e => {
   if (/input|textarea/i.test(e.target.tagName)) return;
   if (e.target && e.target.isContentEditable) return;
+
+  // Cmd/Ctrl shortcuts first — single-key handlers below would otherwise
+  // hijack things like Cmd+D (which the browser would normally bookmark)
+  // or Cmd+C (text copy) before our handler runs.
+  if (e.metaKey || e.ctrlKey) {
+    const k = e.key.toLowerCase();
+    if (k === 'd') {
+      if (!selectedIds.size) return;
+      e.preventDefault();
+      duplicateSelected();
+      return;
+    }
+    if (k === 'c') {
+      // Only intercept if we actually have widgets selected AND no text
+      // selection on the page — otherwise let the browser handle text copy.
+      if (!selectedIds.size) return;
+      if (window.getSelection && window.getSelection().toString().trim()) return;
+      e.preventDefault();
+      copySelectedToClipboard();
+      return;
+    }
+    if (k === 'v') {
+      // Only intercept when the page (not a form field) has focus. The
+      // input/textarea/contentEditable filter at the top already excluded
+      // those cases, so reaching here means board-level paste.
+      e.preventDefault();
+      pasteFromClipboard();
+      return;
+    }
+  }
+
+  // Arrow-nudge for selected widgets. Step = 8 px, 24 px when Shift held.
+  if (/^Arrow(Up|Down|Left|Right)$/.test(e.key) && selectedIds.size > 0) {
+    e.preventDefault();
+    const step = e.shiftKey ? 24 : 8;
+    const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
+    const dy = e.key === 'ArrowUp'   ? -step : e.key === 'ArrowDown'  ? step : 0;
+    selectedIds.forEach(id => {
+      const w = state.widgets.find(x => x.id === id);
+      if (!w || w.locked) return;
+      w.x = Math.max(0, w.x + dx);
+      w.y = Math.max(0, w.y + dy);
+      const n = document.querySelector(`#board .widget[data-id="${id}"]`);
+      if (n) { n.style.left = w.x + 'px'; n.style.top = w.y + 'px'; }
+    });
+    scheduleSave();
+    return;
+  }
+
   if (e.key.toLowerCase() === 'e') setEditMode(!document.body.classList.contains('edit-mode'));
+  // P opens the side panel (Widgets tab by default).
+  if (e.key.toLowerCase() === 'p') {
+    setEditMode(true);
+    selectPanelTab('widgets');
+  }
+  // T opens the side panel and jumps to the Theme tab.
+  if (e.key.toLowerCase() === 't') {
+    setEditMode(true);
+    selectPanelTab('theme');
+  }
   if (e.key === 'Escape') {
     if (selectedIds.size > 0) { clearSelection(); return; }
     if (document.body.classList.contains('edit-mode')) setEditMode(false);
@@ -2155,7 +2318,12 @@ function buildCommandList() {
   const cmds = [];
   cmds.push(
     { id: 'auto-arrange', label: 'Auto-arrange widgets into a grid',  hint: '',      run: () => autoArrange() },
+    { id: 'duplicate',    label: 'Duplicate selected widget',         hint: '⌘D',    run: () => duplicateSelected() },
+    { id: 'copy',         label: 'Copy selected widget',              hint: '⌘C',    run: () => copySelectedToClipboard() },
+    { id: 'paste',        label: 'Paste widget from clipboard',       hint: '⌘V',    run: () => pasteFromClipboard() },
     { id: 'edit-toggle',  label: 'Toggle edit mode',                  hint: 'E',     run: () => setEditMode(!document.body.classList.contains('edit-mode')) },
+    { id: 'open-theme',   label: 'Open Theme tab',                    hint: 'T',     run: () => { setEditMode(true); selectPanelTab('theme'); } },
+    { id: 'open-presets', label: 'Open Presets tab',                  hint: '',      run: () => { setEditMode(true); selectPanelTab('presets'); } },
     { id: 'dark-toggle',  label: 'Toggle dark mode',                  hint: '',      run: () => { state.theme.darkMode = !state.theme.darkMode; applyTheme(); const dm = document.getElementById('darkMode'); if (dm) dm.checked = !!state.theme.darkMode; scheduleSave(); } },
     { id: 'theme-reset',  label: 'Reset theme to defaults',           hint: '',      run: () => { Object.assign(state.theme, defaultTheme()); applyTheme(); scheduleSave(); window.location.reload(); } },
     { id: 'export',       label: 'Export layout as file…',            hint: '',      run: () => exportLayout() },
