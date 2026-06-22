@@ -6160,6 +6160,75 @@ body.dark-mode .catalog-search { background: rgba(255,255,255,0.04); }
 .widget-card.fav { border-color: color-mix(in srgb, var(--accent) 35%, var(--panel-border)); }
 body.dark-mode .card-star { color: var(--muted); }
 
+/* Theme presets — 6 curated palette cards in the Theme tab. Each shows a
+   miniature "widget on canvas" preview with the preset's colors so the
+   user can tell at a glance what it'll look like. */
+.theme-presets-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.theme-preset {
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: border-color 0.12s, transform 0.06s;
+}
+.theme-preset:hover {
+  border-color: var(--accent);
+}
+.theme-preset:active { transform: translateY(1px); }
+.tp-preview {
+  position: relative;
+  width: 100%;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.tp-tile {
+  width: 60%;
+  height: 60%;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.tp-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: block;
+}
+.tp-meta {
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.02);
+  border-top: 1px solid var(--panel-border);
+}
+body.dark-mode .tp-meta { background: rgba(255, 255, 255, 0.04); }
+.tp-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+  line-height: 1.2;
+}
+.tp-sub {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: capitalize;
+  margin-top: 1px;
+}
+
 /* Presets pane */
 .presets-actions {
   display: flex;

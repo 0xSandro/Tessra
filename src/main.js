@@ -1622,11 +1622,17 @@ function applyTheme() {
     document.documentElement.style.setProperty('--widget-bg', t.widgetBg);
     document.documentElement.style.setProperty('--widget-border', t.widgetBorder);
   } else {
-    // Dark mode: clear inline overrides so body.dark-mode CSS provides dark surfaces.
-    // User-customized colors are preserved in state and will reappear when toggled off.
-    document.documentElement.style.removeProperty('--bg');
-    document.documentElement.style.removeProperty('--widget-bg');
-    document.documentElement.style.removeProperty('--widget-border');
+    // Dark mode: themes can opt in to custom dark surfaces via the dark*
+    // fields (set by built-in presets). When none are set, clear the inline
+    // overrides and fall back to body.dark-mode CSS defaults — preserving
+    // the legacy behavior where the user's light-mode color choices reappear
+    // when they toggle back to light.
+    if (t.darkBgColor)      document.documentElement.style.setProperty('--bg', t.darkBgColor);
+    else                    document.documentElement.style.removeProperty('--bg');
+    if (t.darkWidgetBg)     document.documentElement.style.setProperty('--widget-bg', t.darkWidgetBg);
+    else                    document.documentElement.style.removeProperty('--widget-bg');
+    if (t.darkWidgetBorder) document.documentElement.style.setProperty('--widget-border', t.darkWidgetBorder);
+    else                    document.documentElement.style.removeProperty('--widget-border');
   }
   document.documentElement.style.setProperty('--widget-border-width', t.widgetBorderWidth + 'px');
   document.documentElement.style.setProperty('--widget-radius', t.widgetRadius + 'px');
@@ -1688,6 +1694,106 @@ function installCustomFont(dataUrl) {
 function removeCustomFont() {
   const el = document.getElementById('custom-font-face');
   if (el) el.remove();
+}
+
+// ----- Built-in theme presets -----
+// Six curated palettes inspired by popular editor themes. Each one sets
+// accent + light surface colors + dark surface colors + dark-mode flag +
+// surface style. applyTheme honors dark* overrides so users can flip the
+// darkMode toggle later and still see preset-appropriate surfaces.
+const THEME_PRESETS = [
+  {
+    id: 'solarized-light', name: 'Solarized Light',
+    accent: '#268bd2',
+    bgColor: '#fdf6e3', widgetBg: '#eee8d5', widgetBorder: '#93a1a1',
+    darkBgColor: '#002b36', darkWidgetBg: '#073642', darkWidgetBorder: '#586e75',
+    darkMode: false, surfaceStyle: 'flat'
+  },
+  {
+    id: 'tokyo-night', name: 'Tokyo Night',
+    accent: '#7aa2f7',
+    bgColor: '#d5d6db', widgetBg: '#e9eaee', widgetBorder: '#9699a3',
+    darkBgColor: '#1a1b26', darkWidgetBg: '#24283b', darkWidgetBorder: '#414868',
+    darkMode: true, surfaceStyle: 'glass'
+  },
+  {
+    id: 'nord', name: 'Nord',
+    accent: '#88c0d0',
+    bgColor: '#eceff4', widgetBg: '#e5e9f0', widgetBorder: '#d8dee9',
+    darkBgColor: '#2e3440', darkWidgetBg: '#3b4252', darkWidgetBorder: '#4c566a',
+    darkMode: true, surfaceStyle: 'liquid'
+  },
+  {
+    id: 'catppuccin-mocha', name: 'Catppuccin Mocha',
+    accent: '#cba6f7',
+    bgColor: '#eff1f5', widgetBg: '#e6e9ef', widgetBorder: '#9ca0b0',
+    darkBgColor: '#1e1e2e', darkWidgetBg: '#313244', darkWidgetBorder: '#45475a',
+    darkMode: true, surfaceStyle: 'glass'
+  },
+  {
+    id: 'material-you', name: 'Material You',
+    accent: '#6750a4',
+    bgColor: '#f5f0fa', widgetBg: '#ffffff', widgetBorder: '#e7e0ec',
+    darkBgColor: '#1c1b1f', darkWidgetBg: '#2b2930', darkWidgetBorder: '#49454f',
+    darkMode: false, surfaceStyle: 'liquid'
+  },
+  {
+    id: 'monochrome', name: 'Monochrome',
+    accent: '#1a1a1a',
+    bgColor: '#ffffff', widgetBg: '#fafafa', widgetBorder: '#d4d4d4',
+    darkBgColor: '#0a0a0a', darkWidgetBg: '#171717', darkWidgetBorder: '#404040',
+    darkMode: false, surfaceStyle: 'flat'
+  }
+];
+
+function applyThemePreset(p) {
+  if (!p || !state || !state.theme) return;
+  const t = state.theme;
+  // Spread the preset over the existing theme. Any unrelated fields
+  // (font family, glass blur, border radius, etc.) stay as-is.
+  Object.assign(t, {
+    accent: p.accent,
+    bgColor: p.bgColor,
+    widgetBg: p.widgetBg,
+    widgetBorder: p.widgetBorder,
+    darkBgColor: p.darkBgColor,
+    darkWidgetBg: p.darkWidgetBg,
+    darkWidgetBorder: p.darkWidgetBorder,
+    darkMode: !!p.darkMode,
+    surfaceStyle: p.surfaceStyle
+  });
+  applyTheme();
+  // Sync side-panel controls so sliders/swatches/checkboxes show the new values.
+  if (typeof window._refreshThemePanel === 'function') window._refreshThemePanel();
+  saveNow();
+}
+
+function renderThemePresets() {
+  const grid = document.getElementById('theme-presets-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  THEME_PRESETS.forEach(p => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'theme-preset';
+    btn.dataset.id = p.id;
+    // Two swatches show the "feel" — accent against the surface tone the
+    // preset's default mode uses (dark or light).
+    const surface = p.darkMode ? p.darkWidgetBg : p.widgetBg;
+    const baseBg  = p.darkMode ? p.darkBgColor  : p.bgColor;
+    btn.innerHTML = `
+      <div class="tp-preview" style="background:${baseBg}">
+        <div class="tp-tile" style="background:${surface}; border-color: ${p.darkMode ? p.darkWidgetBorder : p.widgetBorder}">
+          <span class="tp-dot" style="background:${p.accent}"></span>
+        </div>
+      </div>
+      <div class="tp-meta">
+        <div class="tp-name">${p.name}</div>
+        <div class="tp-sub">${p.surfaceStyle} · ${p.darkMode ? 'dark' : 'light'}</div>
+      </div>`;
+    btn.addEventListener('click', () => applyThemePreset(p));
+    grid.appendChild(btn);
+  });
 }
 
 function bindTheme() {
@@ -1904,6 +2010,22 @@ function bindTheme() {
   // Exposes `updateSeg` globally so the custom-font upload handler can
   // refresh `data-show=fontFamily:...` visibility after setting fontFamily.
   window._updateSeg = updateSeg;
+
+  // Render theme preset cards and expose a refresh hook the preset
+  // applier uses to re-sync side-panel controls after a one-click apply.
+  renderThemePresets();
+  window._refreshThemePanel = () => {
+    Object.keys(colorControls).forEach(k => colorControls[k].refresh());
+    Object.keys(sliders).forEach(k => sliders[k].refresh());
+    const sh = panel.querySelector('#showHeaders'); if (sh) sh.checked = !!t.showHeaders;
+    const tl = panel.querySelector('#trafficLights'); if (tl) tl.checked = !!t.trafficLights;
+    const dm = panel.querySelector('#darkMode'); if (dm) dm.checked = !!t.darkMode;
+    const ff = panel.querySelector('#fontFamily'); if (ff) ff.value = t.fontFamily || 'system';
+    updateSurfaceActive();
+    refreshImagePreview();
+    updateSeg();
+  };
+
   const fontSel = panel.querySelector('#fontFamily');
   if (fontSel) {
     fontSel.value = t.fontFamily || 'system';
