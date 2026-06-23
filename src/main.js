@@ -109,8 +109,23 @@ function defaultState() {
     makeWidget('todo',  { x: 520, y: 180, z: 4 }),
     makeWidget('notes', { x: 860, y: 180, z: 5, title: 'Notes 1' })
   ];
-  return { maxZ: widgets.length, widgets, theme: defaultTheme(), favorites: [], quickSpawn: ['stickies'], onboardingComplete: false };
+  return { maxZ: widgets.length, widgets, theme: defaultTheme(), favorites: [], quickSpawn: ['stickies'], onboardingComplete: false, integrations: { notion: { token: '' } } };
 }
+
+// Schema for the Integrations side-panel pane. Each provider has a name + one
+// or more credentials shared across every widget under that subcategory in
+// the catalog. Adding a new provider here is enough to surface a fresh card
+// in the Integrations tab — no extra DOM wiring required.
+const INTEGRATIONS = {
+  notion: {
+    name: 'Notion',
+    icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><polyline points="14 8 14 16 18 16"/></svg>',
+    fields: [
+      { key: 'token', label: 'Integration token', placeholder: 'secret_…', type: 'password' }
+    ],
+    setupHint: 'Create an internal integration at <a href="https://www.notion.so/my-integrations" target="_blank" rel="noopener">notion.so/my-integrations</a>, then share pages with it in Notion. This token is used by every Notion widget.'
+  }
+};
 
 // ----- Migration -----
 function migrate(s) {
@@ -187,6 +202,29 @@ function migrate(s) {
     w.locked = !!w.locked;
   });
   s.theme = Object.assign(defaultTheme(), s.theme || {});
+  // Integrations: shared credentials per provider, used by every widget under
+  // a given subcategory. Backfill the structure for users coming from a build
+  // that pre-dated the integrations panel.
+  s.integrations = s.integrations || {};
+  if (!s.integrations.notion || typeof s.integrations.notion !== 'object') {
+    s.integrations.notion = { token: '' };
+  }
+  // Sweep legacy per-widget Notion tokens up into the shared state. Older
+  // builds stored a separate token on each Notion widget's settings; the
+  // first one we find seeds the shared slot if it's still empty.
+  if (!s.integrations.notion.token) {
+    const legacy = s.widgets.find(w =>
+      (w.type === 'notion-db' || w.type === 'notion-today' || w.type === 'notion-recent')
+      && w.settings && w.settings.token
+    );
+    if (legacy) s.integrations.notion.token = legacy.settings.token;
+  }
+  // Strip the now-unused per-widget token so it doesn't sit in storage.
+  s.widgets.forEach(w => {
+    if (w.settings && (w.type === 'notion-db' || w.type === 'notion-today' || w.type === 'notion-recent')) {
+      delete w.settings.token;
+    }
+  });
   // Favorites is a list of widget type IDs the user pinned to the top of
   // the catalog. Filter out any types no longer in the registry so a removed
   // widget doesn't leave a ghost in the favorites section.
@@ -258,6 +296,16 @@ async function notifyIfBackground(title, body) {
 }
 // Expose globally so widgets can fire notifications without import gymnastics
 window.notifyIfBackground = notifyIfBackground;
+
+// Shared integrations getter — widgets read their provider credentials here
+// instead of carrying per-widget tokens. Returns '' for any unknown provider
+// so widgets can blindly call this without null-checking.
+window.tessraIntegration = function (provider, field) {
+  if (!state || !state.integrations) return '';
+  const p = state.integrations[provider];
+  if (!p) return '';
+  return (typeof field === 'string') ? (p[field] || '') : p;
+};
 
 // Auto-arrange. Sort widgets by their current visual order (top-then-left so
 // the rearrangement matches what the user roughly sees), then bin-pack into
@@ -552,6 +600,10 @@ function renderWidget(w) {
     node._cleanups = cleanups;
   }
 
+  // Expose rerender on the DOM node so external code (e.g. the integrations
+  // pane broadcasting a credential change) can ask a live widget to refresh
+  // without having to know about its internal closure.
+  node._rerender = rerender;
   rerender();
 
   // Settings icon: shown only when (a) widget declares a settings schema
@@ -758,7 +810,7 @@ function enableResize(node, w) {
 }
 
 // ----- Catalog (grouped by category, with search) -----
-const CATEGORY_ORDER  = ['time', 'productivity', 'finance', 'web', 'info', 'developer', 'random', 'other'];
+const CATEGORY_ORDER  = ['time', 'productivity', 'finance', 'web', 'info', 'developer', 'random', 'integrations', 'other'];
 const CATEGORY_LABELS = {
   time:         'Time',
   productivity: 'Productivity',
@@ -767,7 +819,13 @@ const CATEGORY_LABELS = {
   info:         'Info',
   developer:    'Developer',
   random:       'Random',
+  integrations: 'Integrations',
   other:        'Other'
+};
+// Optional label overrides for subcategory headers shown inside a category
+// section. Falls back to titlecasing the key when a label isn't listed here.
+const SUBCATEGORY_LABELS = {
+  notion: 'Notion'
 };
 
 // Star icon used for the favorite toggle on each catalog card. One SVG with
@@ -857,10 +915,42 @@ function populateCatalog() {
     section.className = 'catalog-section';
     section.dataset.category = cat;
     section.innerHTML = `<h4 class="catalog-section-title">${CATEGORY_LABELS[cat] || cat}</h4>`;
-    const grid = document.createElement('div');
-    grid.className = 'catalog-grid';
-    defs.forEach(def => grid.appendChild(buildCard(def)));
-    section.appendChild(grid);
+    // Split into subcategories when at least one widget under this category
+    // declares a subcategory. Mixed cases (some with, some without) render
+    // any "uncategorized" widgets first as a plain grid, then group the
+    // tagged ones under labeled sub-sections.
+    const hasSub = defs.some(d => d.subcategory);
+    if (hasSub) {
+      const bySub = {};
+      const plain = [];
+      defs.forEach(d => {
+        if (d.subcategory) (bySub[d.subcategory] ||= []).push(d);
+        else plain.push(d);
+      });
+      if (plain.length) {
+        const grid = document.createElement('div');
+        grid.className = 'catalog-grid';
+        plain.forEach(def => grid.appendChild(buildCard(def)));
+        section.appendChild(grid);
+      }
+      Object.keys(bySub).sort().forEach(sub => {
+        const sub_wrap = document.createElement('div');
+        sub_wrap.className = 'catalog-subsection';
+        sub_wrap.dataset.subcategory = sub;
+        const label = SUBCATEGORY_LABELS[sub] || sub.charAt(0).toUpperCase() + sub.slice(1);
+        sub_wrap.innerHTML = `<h5 class="catalog-subsection-title">${label}</h5>`;
+        const subGrid = document.createElement('div');
+        subGrid.className = 'catalog-grid';
+        bySub[sub].forEach(def => subGrid.appendChild(buildCard(def)));
+        sub_wrap.appendChild(subGrid);
+        section.appendChild(sub_wrap);
+      });
+    } else {
+      const grid = document.createElement('div');
+      grid.className = 'catalog-grid';
+      defs.forEach(def => grid.appendChild(buildCard(def)));
+      section.appendChild(grid);
+    }
     host.appendChild(section);
     seen.add(cat);
   };
@@ -880,6 +970,10 @@ function populateCatalog() {
         const match = !q || card.dataset.label.includes(q);
         card.classList.toggle('hidden', !match);
         if (match) anyVisible = true;
+      });
+      document.querySelectorAll('.catalog-subsection').forEach(sub => {
+        const subHas = sub.querySelector('.widget-card:not(.hidden)');
+        sub.classList.toggle('hidden', !subHas);
       });
       document.querySelectorAll('.catalog-section').forEach(section => {
         const sectionHas = section.querySelector('.widget-card:not(.hidden)');
@@ -1102,6 +1196,80 @@ panel.querySelectorAll('.panel-tab').forEach(tab => {
     panel.querySelectorAll('.panel-pane').forEach(p => {
       p.classList.toggle('hidden', p.dataset.pane !== tab.dataset.tab);
     });
+  });
+});
+
+// ----- Integrations pane -----
+// Builds one card per provider in INTEGRATIONS, with a credential input bound
+// to state.integrations[provider][field]. Saves on input (debounced via
+// scheduleSave) and broadcasts a 'tessra:integrations-changed' event so any
+// live widget that uses that provider can re-render with the new credential.
+function populateIntegrationsPane() {
+  const host = document.getElementById('integrations-list');
+  if (!host) return;
+  host.innerHTML = '';
+  Object.entries(INTEGRATIONS).forEach(([provider, def]) => {
+    const card = document.createElement('section');
+    card.className = 'integration-card';
+    card.dataset.provider = provider;
+    let fieldsHtml = '';
+    def.fields.forEach(f => {
+      const val = (state.integrations?.[provider]?.[f.key] || '');
+      const inputType = f.type === 'password' ? 'password' : 'text';
+      fieldsHtml += `
+        <label class="integration-field">
+          <span class="integration-field-label">${f.label}</span>
+          <input type="${inputType}" data-field="${f.key}" value="${val.replace(/"/g, '&quot;')}"
+                 placeholder="${f.placeholder || ''}" spellcheck="false" autocomplete="off"/>
+        </label>`;
+    });
+    card.innerHTML = `
+      <div class="integration-head">
+        <span class="integration-icon">${def.icon}</span>
+        <span class="integration-name">${def.name}</span>
+        <span class="integration-status" data-role="status"></span>
+      </div>
+      <p class="integration-hint">${def.setupHint}</p>
+      ${fieldsHtml}
+    `;
+    host.appendChild(card);
+
+    // Set initial status (Connected / Not connected) based on whether all
+    // declared fields are populated. Updates live as the user types.
+    const statusEl = card.querySelector('[data-role="status"]');
+    function refreshStatus() {
+      const allSet = def.fields.every(f => !!(state.integrations?.[provider]?.[f.key]));
+      statusEl.textContent = allSet ? 'Connected' : 'Not connected';
+      statusEl.classList.toggle('on', allSet);
+    }
+    refreshStatus();
+
+    card.querySelectorAll('input[data-field]').forEach(input => {
+      input.addEventListener('input', () => {
+        if (!state.integrations[provider]) state.integrations[provider] = {};
+        state.integrations[provider][input.dataset.field] = input.value;
+        refreshStatus();
+        scheduleSave();
+        // Tell every widget that lives under this provider's subcategory to
+        // rerender — they'll pick up the new credential via tessraIntegration().
+        window.dispatchEvent(new CustomEvent('tessra:integrations-changed', {
+          detail: { provider, field: input.dataset.field }
+        }));
+      });
+    });
+  });
+}
+
+// Re-render any widget whose subcategory matches the changed provider. Lets
+// the Notion widgets pick up a new token without a full page reload.
+window.addEventListener('tessra:integrations-changed', (e) => {
+  const provider = e.detail?.provider;
+  if (!provider) return;
+  state.widgets.forEach(w => {
+    const def = registry.get(w.type);
+    if (!def || def.subcategory !== provider) return;
+    const node = document.querySelector(`#board .widget[data-id="${w.id}"]`);
+    if (node && typeof node._rerender === 'function') node._rerender();
   });
 });
 
@@ -1729,13 +1897,6 @@ const THEME_PRESETS = [
     bgColor: '#eff1f5', widgetBg: '#e6e9ef', widgetBorder: '#9ca0b0',
     darkBgColor: '#1e1e2e', darkWidgetBg: '#313244', darkWidgetBorder: '#45475a',
     darkMode: true, surfaceStyle: 'glass'
-  },
-  {
-    id: 'material-you', name: 'Material You',
-    accent: '#6750a4',
-    bgColor: '#f5f0fa', widgetBg: '#ffffff', widgetBorder: '#e7e0ec',
-    darkBgColor: '#1c1b1f', darkWidgetBg: '#2b2930', darkWidgetBorder: '#49454f',
-    darkMode: false, surfaceStyle: 'liquid'
   },
   {
     id: 'monochrome', name: 'Monochrome',
@@ -2973,6 +3134,7 @@ function setupPageMarquee() {
   if (!state.theme) state.theme = defaultTheme();
   applyTheme();
   populateCatalog();
+  populateIntegrationsPane();
   state.widgets.forEach(renderWidget);
   bindTheme();
   setupPageMarquee();

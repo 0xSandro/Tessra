@@ -31,7 +31,8 @@
     "https://speed.cloudflare.com/*",
     "https://air-quality-api.open-meteo.com/*",
     "https://api.wheretheiss.at/*",
-    "https://en.wikipedia.org/*"
+    "https://en.wikipedia.org/*",
+    "https://api.notion.com/*"
   ],
   "content_security_policy": "script-src 'self' https://widgets.coingecko.com; object-src 'self';",
   "browser_specific_settings": {

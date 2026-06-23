@@ -5,6 +5,7 @@
 //     title:            string                 // shown in catalog and widget header
 //     icon:             string                 // catalog icon (text or SVG markup)
 //     category?:        string                 // for catalog grouping (step 4)
+//     subcategory?:     string                 // nested grouping under a category (e.g. 'notion' under 'integrations')
 //     defaultSize:      { w: number, h: number }
 //     minSize?:         { w: number, h: number }  // resize lower bound (default 160 × 80)
 //     maxSize?:         { w: number, h: number }  // resize upper bound (default 4000 × 4000)

@@ -101,6 +101,7 @@
     <div class="panel-tabs" role="tablist">
       <button class="panel-tab active" data-tab="widgets" role="tab">Widgets</button>
       <button class="panel-tab" data-tab="theme"   role="tab">Theme</button>
+      <button class="panel-tab" data-tab="integrations" role="tab">Integrations</button>
       <button class="panel-tab" data-tab="presets" role="tab">Presets</button>
     </div>
 
@@ -276,6 +277,13 @@
       <section class="control-group">
         <button class="btn-subtle danger" id="themeReset">Reset everything to defaults</button>
       </section>
+    </div>
+
+    <div class="panel-pane hidden" data-pane="integrations">
+      <p class="panel-hint">Connect external services once — every widget that uses them picks up the credentials automatically.</p>
+      <div id="integrations-list">
+        <!-- Provider cards rendered from the INTEGRATIONS schema in main.js -->
+      </div>
     </div>
 
     <div class="panel-pane hidden" data-pane="presets">

@@ -49,3 +49,6 @@ import './airquality.js';
 import './moon.js';
 import './iss.js';
 import './ontd.js';
+import './notion-db.js';
+import './notion-today.js';
+import './notion-recent.js';
