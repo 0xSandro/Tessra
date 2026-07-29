@@ -54,11 +54,24 @@ const defaultTheme = () => ({
   glassAlpha: 30,         // background opacity 10-90 (translated to 0.10-0.90 in CSS)
   fontFamily: 'system',   // 'system' | 'inter' | 'geist' | 'jetbrains' | 'serif' | 'mono' | 'custom'
   customFontDataUrl: null,// data: URL for an uploaded font file
-  customFontName: null    // user-visible name of the uploaded font
+  customFontName: null,   // user-visible name of the uploaded font
+  zoom: 100                // interface scale %, applied like browser zoom — helps small/high-PPI screens
 });
 
 function id() { return Math.random().toString(36).slice(2, 9); }
 function snap(v) { return Math.round(v / GRID) * GRID; }
+
+// The whole page is scaled via CSS `zoom` (see applyTheme) so the Zoom
+// setting behaves like the browser's own Ctrl +/-. That property scales
+// rendering AND layout for everything under <html>, but raw mouse-event
+// coordinates (clientX/clientY), window.innerWidth/innerHeight, and
+// getBoundingClientRect() all keep reporting true physical pixels — only
+// state.widgets' stored x/y/w/h (and anything derived from them, like
+// node.style.left) live in "logical" pre-zoom pixels. Any code that turns a
+// physical measurement into a logical one (or vice versa) must go through
+// this factor, or the board will drift out from under the cursor at any
+// zoom level other than 100%.
+function zoomFactor() { return ((state && state.theme && state.theme.zoom) || 100) / 100; }
 
 function makeWidget(type, opts = {}) {
   const def = registry.get(type);
@@ -129,7 +142,11 @@ const INTEGRATIONS = {
 
 // ----- Migration -----
 function migrate(s) {
-  if (!s || !Array.isArray(s.widgets)) return s;
+  if (!s) return s;
+  // A hand-edited or corrupted storage blob (or one missing `widgets`
+  // entirely) would otherwise reach init()'s `state.widgets.forEach(...)`
+  // and crash the whole new-tab page with nothing to recover from.
+  if (!Array.isArray(s.widgets)) { s.widgets = []; return s; }
   const out = [];
   for (const w of s.widgets) {
     // Legacy v0.x: combined notes widget that held both notes text and todos.
@@ -319,7 +336,7 @@ function autoArrange() {
   // Leave room on the right for the (open) side panel; otherwise use the
   // full viewport. The button lives in the panel so it's likely open.
   const panelOpen = document.body.classList.contains('edit-mode');
-  const usableW = (window.innerWidth - (panelOpen ? 340 : 0)) - PAD;
+  const usableW = (window.innerWidth / zoomFactor() - (panelOpen ? 340 : 0)) - PAD;
 
   const ordered = state.widgets.slice().sort((a, b) => {
     // Treat positions within 30 px of each other as "same row"
@@ -498,15 +515,12 @@ function serialize() {
 }
 
 let saveTimer = null;
-let savedOnce = false;
 function saveNow() {
   clearTimeout(saveTimer);
   saveTimer = null;
   try {
     const snapshot = serialize();
-    return store.set(STORAGE_KEY, snapshot).then(() => {
-      if (!savedOnce) { savedOnce = true; console.log('[Tessra] state persisted'); }
-    }).catch(err => console.error('[Tessra] save failed:', err));
+    return store.set(STORAGE_KEY, snapshot).catch(err => console.error('[Tessra] save failed:', err));
   } catch (err) {
     console.error('[Tessra] serialize failed:', err);
   }
@@ -649,18 +663,27 @@ function renderWidget(w) {
   node.querySelector('.widget-remove').addEventListener('click', () => {
     if (w.locked) return;                          // locked widgets can't be removed
     runCleanups();
+    node._dragCleanup?.();
+    node._resizeCleanup?.();
     state.widgets = state.widgets.filter(x => x.id !== w.id);
     selectedIds.delete(w.id);
     node.remove();
     scheduleSave();
   });
 
-  enableDrag(node, w);
-  enableResize(node, w);
+  // Stored on the node so any other teardown path (multi-delete, layout
+  // import/paste) can release these window-level listeners too — see the
+  // leak warning on enableDrag's definition.
+  node._dragCleanup = enableDrag(node, w);
+  node._resizeCleanup = enableResize(node, w);
   board.appendChild(node);
   return node;
 }
 
+// Returns a cleanup function that removes this widget's window-level drag
+// listeners — callers must invoke it when the widget's node is destroyed
+// (deleted, or torn down on layout import/paste), otherwise the closure
+// keeps the dead node/widget alive for the rest of the session.
 function enableDrag(node, w) {
   let startX, startY, ox, oy, dragging = false;
   // Group offsets: captured at drag-start when this widget is part of a
@@ -668,6 +691,10 @@ function enableDrag(node, w) {
   // selected widget's position relative to the actively-dragged one, so on
   // each move we can keep the group rigid.
   let groupOffsets = null;
+  // Snap candidates only change with the selection/board contents, not on
+  // every pixel of mouse movement — computed once in start(), reused for
+  // the whole drag instead of re-filtering state.widgets on every mousemove.
+  let others = null;
 
   const start = (clientX, clientY, target) => {
     if (w.locked) return;                          // hard stop — locked widget
@@ -709,12 +736,27 @@ function enableDrag(node, w) {
       // because the user is clearly working with a single widget now.
       if (selectedIds.size > 0) clearSelection();
     }
+
+    // Snap candidates: every other widget (skipping group members so the
+    // moving group doesn't snap to itself), computed once for the whole
+    // drag rather than re-filtered on every mousemove. Sticky notes don't
+    // snap at all, so skip building the list for them entirely.
+    if (w.type !== 'stickies') {
+      const skipIds = new Set([w.id]);
+      if (groupOffsets) groupOffsets.forEach(g => skipIds.add(g.widget.id));
+      others = state.widgets
+        .filter(x => !skipIds.has(x.id) && x.type !== 'stickies') // ignore stickies as snap targets too
+        .map(rectFor);
+    } else {
+      others = null;
+    }
   };
 
   const move = (clientX, clientY) => {
     if (!dragging) return;
-    const nx = snap(ox + (clientX - startX));
-    const ny = snap(oy + (clientY - startY));
+    const z = zoomFactor();
+    const nx = snap(ox + (clientX - startX) / z);
+    const ny = snap(oy + (clientY - startY) / z);
 
     // Sticky notes drag freely without snap or alignment guides — they're
     // tossed onto the desktop intentionally and the tilt makes edge-snaps
@@ -722,20 +764,13 @@ function enableDrag(node, w) {
     const isSticky = w.type === 'stickies';
     let bestX = null, bestY = null;
     if (!isSticky) {
-      // Snap candidates: every other widget (skipping group members so the
-      // moving group doesn't snap to itself) plus the viewport midlines.
-      const skipIds = new Set([w.id]);
-      if (groupOffsets) groupOffsets.forEach(g => skipIds.add(g.widget.id));
-      const others = state.widgets
-        .filter(x => !skipIds.has(x.id) && x.type !== 'stickies') // ignore stickies as snap targets too
-        .map(rectFor);
       const d = {
         left: nx, top: ny,
         right: nx + w.w, bottom: ny + w.h,
         w: w.w, h: w.h,
         cx: nx + w.w / 2, cy: ny + w.h / 2
       };
-      ({ bestX, bestY } = computeSnap(d, others, window.innerWidth, window.innerHeight));
+      ({ bestX, bestY } = computeSnap(d, others, window.innerWidth / z, window.innerHeight / z));
     }
 
     const fx = Math.max(0, nx + (bestX ? bestX.delta : 0));
@@ -766,21 +801,30 @@ function enableDrag(node, w) {
     setInteracting(false);
     scheduleSave();
   };
-  node.addEventListener('mousedown', e => { start(e.clientX, e.clientY, e.target); if (dragging) e.preventDefault(); });
-  window.addEventListener('mousemove', e => move(e.clientX, e.clientY));
+  const onMouseDown = e => { start(e.clientX, e.clientY, e.target); if (dragging) e.preventDefault(); };
+  const onMouseMove = e => move(e.clientX, e.clientY);
+  node.addEventListener('mousedown', onMouseDown);
+  window.addEventListener('mousemove', onMouseMove);
   window.addEventListener('mouseup', end);
+  return () => {
+    node.removeEventListener('mousedown', onMouseDown);
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', end);
+  };
 }
 
+// Returns a cleanup function — see enableDrag's note above; same leak risk
+// applies here since this also attaches window-level listeners per widget.
 function enableResize(node, w) {
   const handle = node.querySelector('.widget-resize');
-  if (!handle) return;
+  if (!handle) return () => {};
   const def = registry.get(w.type);
   const min = (def && def.minSize) || { w: 160, h: 80 };
   const max = (def && def.maxSize) || { w: 4000, h: 4000 };
 
   let startX, startY, ow, oh, resizing = false;
 
-  handle.addEventListener('mousedown', e => {
+  const onHandleMouseDown = e => {
     if (!document.body.classList.contains('edit-mode')) return;
     if (w.locked) return;                          // hard stop — locked widget
     e.preventDefault();
@@ -791,22 +835,31 @@ function enableResize(node, w) {
     node.classList.add('resizing');
     bringToFront(w, node);
     setInteracting(true);
-  });
-  window.addEventListener('mousemove', e => {
+  };
+  const onMouseMove = e => {
     if (!resizing) return;
-    const nw = Math.max(min.w, Math.min(max.w, snap(ow + (e.clientX - startX))));
-    const nh = Math.max(min.h, Math.min(max.h, snap(oh + (e.clientY - startY))));
+    const z = zoomFactor();
+    const nw = Math.max(min.w, Math.min(max.w, snap(ow + (e.clientX - startX) / z)));
+    const nh = Math.max(min.h, Math.min(max.h, snap(oh + (e.clientY - startY) / z)));
     w.w = nw; w.h = nh;
     node.style.width  = nw + 'px';
     node.style.height = nh + 'px';
-  });
-  window.addEventListener('mouseup', () => {
+  };
+  const onMouseUp = () => {
     if (!resizing) return;
     resizing = false;
     node.classList.remove('resizing');
     setInteracting(false);
     scheduleSave();
-  });
+  };
+  handle.addEventListener('mousedown', onHandleMouseDown);
+  window.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('mouseup', onMouseUp);
+  return () => {
+    handle.removeEventListener('mousedown', onHandleMouseDown);
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', onMouseUp);
+  };
 }
 
 // ----- Catalog (grouped by category, with search) -----
@@ -852,13 +905,15 @@ function toggleFavorite(type) {
 // category sections — same DOM, same drag behavior, same star toggle.
 function buildCard(def) {
   const card = document.createElement('div');
-  card.className = 'widget-card' + (isFavorite(def.type) ? ' fav' : '');
+  const comingSoon = !!def.comingSoon;
+  card.className = 'widget-card' + (isFavorite(def.type) ? ' fav' : '') + (comingSoon ? ' coming-soon' : '');
   card.dataset.type  = def.type;
   card.dataset.label = (def.title || def.type).toLowerCase();
   card.innerHTML = `
     <button class="card-star ${isFavorite(def.type) ? 'on' : ''}" aria-label="Favorite" title="${isFavorite(def.type) ? 'Unfavorite' : 'Favorite'}">${STAR_SVG}</button>
     <div class="card-icon">${def.icon || '◻'}</div>
-    <div class="card-label">${def.title}</div>`;
+    <div class="card-label">${def.title}</div>
+    ${comingSoon ? '<div class="card-badge">Coming soon</div>' : ''}`;
   // Star click toggles favorite; stopPropagation so the card's drag handler
   // doesn't pick it up.
   const star = card.querySelector('.card-star');
@@ -868,6 +923,7 @@ function buildCard(def) {
     toggleFavorite(def.type);
   });
   card.addEventListener('mousedown', e => {
+    if (comingSoon) return;                     // not placeable yet
     if (e.target.closest('.card-star')) return; // star handles its own click
     e.preventDefault();
     startCatalogDrag(def.type, e);
@@ -1032,16 +1088,22 @@ function spawnFromClipboardPayload(payload, baseXY) {
     const x = (baseXY?.x ?? 80) + i * STAGGER;
     const y = (baseXY?.y ?? 100) + i * STAGGER;
     state.maxZ = (state.maxZ || 0) + 1;
+    // src comes from the clipboard or a pasted/imported share string — treat
+    // it like any other untrusted input and clamp to the widget's own
+    // bounds rather than trusting whatever numbers are in the payload.
+    const min = def.minSize || { w: 160, h: 80 };
+    const max = def.maxSize || { w: 4000, h: 4000 };
+    const w = Number.isFinite(src.w) ? Math.max(min.w, Math.min(max.w, src.w)) : undefined;
+    const h = Number.isFinite(src.h) ? Math.max(min.h, Math.min(max.h, src.h)) : undefined;
     const widget = makeWidget(src.type, {
       x: snap(Math.max(0, x)),
       y: snap(Math.max(0, y)),
-      w: src.w,
-      h: src.h,
+      w, h,
       z: state.maxZ,
       data:     src.data     ? JSON.parse(JSON.stringify(src.data))     : undefined,
       settings: src.settings ? JSON.parse(JSON.stringify(src.settings)) : undefined
     });
-    if (src.title) widget.title = src.title;
+    if (typeof src.title === 'string' && src.title) widget.title = src.title;
     else if (def.autoNumber) widget.title = nextAutoTitle(src.type);
     if (src.locked) widget.locked = true;
     state.widgets.push(widget);
@@ -1181,6 +1243,8 @@ document.addEventListener('keydown', e => {
     toRemove.forEach(w => {
       const node = document.querySelector(`.widget[data-id="${w.id}"]`);
       if (node && node._cleanups) node._cleanups.forEach(fn => { try { fn(); } catch {} });
+      node?._dragCleanup?.();
+      node?._resizeCleanup?.();
       if (node) node.remove();
     });
     const removeIds = new Set(toRemove.map(w => w.id));
@@ -1284,8 +1348,8 @@ function startCatalogDrag(type, e) {
   const size = def.defaultSize;
   ghost.style.width = size.w + 'px';
   ghost.style.height = size.h + 'px';
-  ghost.style.left = (e.clientX - size.w / 2) + 'px';
-  ghost.style.top  = (e.clientY - size.h / 2) + 'px';
+  ghost.style.left = (e.clientX / zoomFactor() - size.w / 2) + 'px';
+  ghost.style.top  = (e.clientY / zoomFactor() - size.h / 2) + 'px';
   ghost.textContent = def.title;
   ghost.classList.remove('hidden');
   document.body.style.userSelect = 'none';
@@ -1296,8 +1360,8 @@ function moveGhost(e) {
   const def = registry.get(dragType);
   if (!def) return;
   const size = def.defaultSize;
-  ghost.style.left = (e.clientX - size.w / 2) + 'px';
-  ghost.style.top  = (e.clientY - size.h / 2) + 'px';
+  ghost.style.left = (e.clientX / zoomFactor() - size.w / 2) + 'px';
+  ghost.style.top  = (e.clientY / zoomFactor() - size.h / 2) + 'px';
 }
 function dropGhost(e) {
   if (!dragType) return;
@@ -1315,8 +1379,8 @@ function dropGhost(e) {
   const def = registry.get(type);
   if (!def) return;
   const size = def.defaultSize;
-  const x = Math.max(0, snap(e.clientX - size.w / 2));
-  const y = Math.max(0, snap(e.clientY - size.h / 2));
+  const x = Math.max(0, snap(e.clientX / zoomFactor() - size.w / 2));
+  const y = Math.max(0, snap(e.clientY / zoomFactor() - size.h / 2));
   state.maxZ = (state.maxZ || 0) + 1;
   const w = makeWidget(type, { x, y, z: state.maxZ });
   if (def.autoNumber) w.title = nextAutoTitle(type);
@@ -1425,12 +1489,15 @@ const ColorPicker = (() => {
   });
 
   function position(anchor) {
+    const z = zoomFactor();
     const rect = anchor.getBoundingClientRect();
+    const rectLeft = rect.left / z, rectRight = rect.right / z, rectTop = rect.top / z;
+    const vh = window.innerHeight / z;
     const popW = 240, popH = 280;
-    let left = rect.left - popW - 10;
-    if (left < 8) left = rect.right + 10;
-    let top = rect.top - 8;
-    if (top + popH > window.innerHeight - 8) top = window.innerHeight - popH - 8;
+    let left = rectLeft - popW - 10;
+    if (left < 8) left = rectRight + 10;
+    let top = rectTop - 8;
+    if (top + popH > vh - 8) top = vh - popH - 8;
     if (top < 8) top = 8;
     pop.style.left = left + 'px';
     pop.style.top  = top + 'px';
@@ -1715,14 +1782,19 @@ const SettingsPopover = (() => {
   });
 
   function position(anchor) {
+    const z = zoomFactor();
     const rect = anchor.getBoundingClientRect();
+    const rectLeft = rect.left / z, rectRight = rect.right / z;
+    const rectTop = rect.top / z, rectBottom = rect.bottom / z;
+    const vw = window.innerWidth / z, vh = window.innerHeight / z;
     const popW = 260;
-    const popH = pop.offsetHeight || 240;
-    let left = rect.right - popW;
-    if (left < 8) left = rect.left;
-    if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
-    let top = rect.bottom + 8;
-    if (top + popH > window.innerHeight - 8) top = rect.top - popH - 8;
+    const rawH = pop.offsetHeight;
+    const popH = rawH ? rawH / z : 240;
+    let left = rectRight - popW;
+    if (left < 8) left = rectLeft;
+    if (left + popW > vw - 8) left = vw - popW - 8;
+    let top = rectBottom + 8;
+    if (top + popH > vh - 8) top = rectTop - popH - 8;
     if (top < 8) top = 8;
     pop.style.left = left + 'px';
     pop.style.top  = top + 'px';
@@ -1845,6 +1917,10 @@ function applyTheme() {
   } else {
     removeCustomFont();
   }
+  // Whole-page zoom, applied the same way as the browser's own Ctrl +/- —
+  // scales layout, not just rendering, so every coordinate (drag, resize,
+  // snap-guides) stays correct with zero changes to that math.
+  document.documentElement.style.zoom = (t.zoom || 100) / 100;
 }
 
 // Inject a single <style id="custom-font-face"> tag with the @font-face rule.
@@ -2060,10 +2136,10 @@ function bindTheme() {
 
   // Sliders
   const sliders = {};
-  const bindSlider = (rangeSel, numSel, key, max) => {
+  const bindSlider = (rangeSel, numSel, key, max, min = 0) => {
     const r = $(rangeSel), n = $(numSel);
     const set = v => {
-      v = Math.max(0, Math.min(max, Math.round(+v || 0)));
+      v = Math.max(min, Math.min(max, Math.round(+v || 0)));
       t[key] = v; r.value = v; n.value = v;
       applyTheme(); scheduleSave();
     };
@@ -2077,6 +2153,7 @@ function bindTheme() {
   bindSlider('#widgetShadow',      '#widgetShadowN',      'widgetShadow',      100);
   bindSlider('#glassBlur',         '#glassBlurN',         'glassBlur',         60);
   bindSlider('#glassAlpha',        '#glassAlphaN',        'glassAlpha',        90);
+  bindSlider('#zoom',              '#zoomN',              'zoom',              150, 60);
 
   // Surface style segmented control
   const surfaceSeg = panel.querySelector('[data-control="surfaceStyle"]');
@@ -2197,10 +2274,8 @@ function bindTheme() {
       saveNow();
     });
   }
-  // Allow the data-show system to also flip on fontFamily changes
-  const origUpdateSeg = updateSeg;
-  // (updateSeg already iterates [data-show] so fontFamily is picked up
-  // automatically — no extra wiring needed.)
+  // updateSeg() already iterates every [data-show] element, so fontFamily
+  // changes are picked up automatically — no extra wiring needed here.
 
   updateSeg();
 }
@@ -2298,9 +2373,10 @@ function toggleQuickPicker() {
   // Anchor by the add button's bottom-right corner.
   const addBtn = document.getElementById('qa-add-btn');
   if (addBtn) {
+    const z = zoomFactor();
     const rect = addBtn.getBoundingClientRect();
-    picker.style.top   = (rect.bottom + 8) + 'px';
-    picker.style.right = (window.innerWidth - rect.right) + 'px';
+    picker.style.top   = (rect.bottom / z + 8) + 'px';
+    picker.style.right = ((window.innerWidth - rect.right) / z) + 'px';
   }
   // Outside-click closer. Defer so the click that opened the picker doesn't
   // immediately close it.
@@ -2367,6 +2443,8 @@ async function importLayoutFromFile(file) {
   // Tear down every existing widget cleanly so timers/listeners don't leak.
   document.querySelectorAll('#board .widget').forEach(node => {
     if (node._cleanups) node._cleanups.forEach(fn => { try { fn(); } catch {} });
+    node._dragCleanup?.();
+    node._resizeCleanup?.();
     node.remove();
   });
   clearSelection();
@@ -2484,6 +2562,8 @@ async function pasteShareString() {
   if (!confirm('Importing will replace your current layout. Continue?')) return;
   document.querySelectorAll('#board .widget').forEach(node => {
     if (node._cleanups) node._cleanups.forEach(fn => { try { fn(); } catch {} });
+    node._dragCleanup?.();
+    node._resizeCleanup?.();
     node.remove();
   });
   clearSelection();
@@ -2513,9 +2593,10 @@ function openZOrderPopover(anchor, w, node) {
   const pop = document.getElementById('zorder-popover');
   if (!pop) return;
   zOrderTarget = { w, node };
+  const z = zoomFactor();
   const rect = anchor.getBoundingClientRect();
-  pop.style.top   = (rect.bottom + 4) + 'px';
-  pop.style.right = (window.innerWidth - rect.right) + 'px';
+  pop.style.top   = (rect.bottom / z + 4) + 'px';
+  pop.style.right = ((window.innerWidth - rect.right) / z) + 'px';
   pop.classList.remove('hidden');
   setTimeout(() => {
     const close = e => {
@@ -3075,8 +3156,9 @@ function setupPageMarquee() {
     originX = e.clientX; originY = e.clientY;
     dragging = true;
     rect.classList.add('active');
-    rect.style.left = originX + 'px';
-    rect.style.top  = originY + 'px';
+    const z0 = zoomFactor();
+    rect.style.left = (originX / z0) + 'px';
+    rect.style.top  = (originY / z0) + 'px';
     rect.style.width = '0px';
     rect.style.height = '0px';
     // Suppress text selection that would normally accompany a drag on body
@@ -3085,10 +3167,11 @@ function setupPageMarquee() {
   });
   window.addEventListener('mousemove', e => {
     if (!dragging) return;
-    const x = Math.min(originX, e.clientX);
-    const y = Math.min(originY, e.clientY);
-    const w = Math.abs(e.clientX - originX);
-    const h = Math.abs(e.clientY - originY);
+    const z = zoomFactor();
+    const x = Math.min(originX, e.clientX) / z;
+    const y = Math.min(originY, e.clientY) / z;
+    const w = Math.abs(e.clientX - originX) / z;
+    const h = Math.abs(e.clientY - originY) / z;
     rect.style.left = x + 'px';
     rect.style.top  = y + 'px';
     rect.style.width  = w + 'px';
@@ -3111,10 +3194,11 @@ function setupPageMarquee() {
       return;
     }
     const boardRect = document.getElementById('board').getBoundingClientRect();
-    const mx0 = Math.min(originX, e.clientX) - boardRect.left;
-    const my0 = Math.min(originY, e.clientY) - boardRect.top;
-    const mx1 = Math.max(originX, e.clientX) - boardRect.left;
-    const my1 = Math.max(originY, e.clientY) - boardRect.top;
+    const z1 = zoomFactor();
+    const mx0 = (Math.min(originX, e.clientX) - boardRect.left) / z1;
+    const my0 = (Math.min(originY, e.clientY) - boardRect.top) / z1;
+    const mx1 = (Math.max(originX, e.clientX) - boardRect.left) / z1;
+    const my1 = (Math.max(originY, e.clientY) - boardRect.top) / z1;
     const hits = state.widgets
       .filter(w => !(w.x + w.w < mx0 || w.x > mx1 || w.y + w.h < my0 || w.y > my1))
       .map(w => w.id);

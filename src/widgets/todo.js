@@ -4,7 +4,7 @@ import { escapeHtml } from '../utils.js';
 register({
   type: 'todo',
   title: 'To-do',
-  icon: '☑',
+  icon: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12l2.5 2.5L16 9"/></svg>',
   category: 'productivity',
   defaultSize: { w: 320, h: 260 },
   minSize:     { w: 200, h: 120 },

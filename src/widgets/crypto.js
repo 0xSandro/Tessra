@@ -1,5 +1,5 @@
 import { register } from '../widget-registry.js';
-import { escapeHtml } from '../utils.js';
+import { escapeHtml, isSafeUrl } from '../utils.js';
 
 // CoinGecko free tier: ~30 requests/minute. Our refresh interval is 60s+,
 // and results are cached on the widget instance, so multiple tabs share data
@@ -160,7 +160,7 @@ register({
         const changeCls = changeStr ? (change >= 0 ? 'positive' : 'negative') : '';
         return `
           <div class="crypto-item" data-id="${escapeHtml(coin.id)}">
-            ${coin.image
+            ${isSafeUrl(coin.image)
                 ? `<img class="crypto-icon" src="${escapeHtml(coin.image)}" alt="" onerror="this.style.visibility='hidden'"/>`
                 : `<div class="crypto-icon"></div>`}
             <div class="crypto-info">

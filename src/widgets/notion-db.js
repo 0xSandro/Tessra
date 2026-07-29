@@ -1,5 +1,5 @@
 import { register } from '../widget-registry.js';
-import { escapeHtml } from '../utils.js';
+import { escapeHtml, isSafeUrl } from '../utils.js';
 import { notionFetch, propertyText, inferProperties, findTitleProperty, normalizeDatabaseId } from './_notion.js';
 
 // Notion Database — generic schema-aware viewer. Configure it once with a
@@ -23,6 +23,7 @@ register({
   icon: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="9" x2="9" y2="20"/></svg>',
   category: 'integrations',
   subcategory: 'notion',
+  comingSoon: true, // Notion integration isn't fully working yet — greyed out in the catalog
   defaultSize: { w: 520, h: 380 },
   minSize:     { w: 320, h: 220 },
 
@@ -122,7 +123,8 @@ register({
           <tbody>`;
       data.pages.forEach(page => {
         const title = page.properties && page.properties[titleName] ? propertyText(page.properties[titleName]) : '(untitled)';
-        html += `<tr data-url="${escapeHtml(page.url || '')}">
+        const pageUrl = isSafeUrl(page.url) ? page.url : '';
+        html += `<tr data-url="${escapeHtml(pageUrl)}">
           <td class="ndb-title">${escapeHtml(title || '(untitled)')}</td>
           ${cols.map(c => `<td>${escapeHtml(propertyText(page.properties && page.properties[c]))}</td>`).join('')}
         </tr>`;

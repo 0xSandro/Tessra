@@ -1,10 +1,10 @@
 import { register } from '../widget-registry.js';
-import { escapeHtml } from '../utils.js';
+import { escapeHtml, isSafeUrl } from '../utils.js';
 
 register({
   type: 'shortcuts',
   title: 'Shortcuts',
-  icon: '▦',
+  icon: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
   category: 'web',
   defaultSize: { w: 460, h: 240 },
   minSize:     { w: 160, h: 120 },
@@ -17,7 +17,11 @@ register({
       data.items.forEach((it, idx) => {
         const a = document.createElement('a');
         a.className = 'shortcut';
-        a.href = it.url;
+        // Imported/shared layouts (Presets → Import/Paste) write data.items
+        // directly, bypassing the https:// normalization the Add flow below
+        // does — re-validate here so a crafted preset can't smuggle in a
+        // javascript: URI.
+        a.href = isSafeUrl(it.url) ? it.url : '#';
         let host = '';
         try { host = new URL(it.url).hostname; } catch {}
         a.innerHTML = `

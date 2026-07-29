@@ -125,7 +125,7 @@ register({
       condEl.className = 'weather-cond';
       detailEl.innerHTML = `
         <span>Feels ${Math.round(cur.apparent_temperature)}${unitSym}</span>
-        <span>Hum ${cur.relative_humidity_2m}%</span>
+        <span>Hum ${Math.round(cur.relative_humidity_2m)}%</span>
         <span>Wind ${Math.round(cur.wind_speed_10m)} km/h</span>`;
 
       if (settings.showForecast && data.weather.daily?.time?.length > 1) {

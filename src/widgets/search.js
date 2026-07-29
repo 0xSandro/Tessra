@@ -13,7 +13,7 @@ const ENGINES = {
 register({
   type: 'search',
   title: 'Search',
-  icon: '⌕',
+  icon: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.3" y1="15.3" x2="20.5" y2="20.5"/></svg>',
   category: 'web',
   defaultSize: { w: 480, h: 110 },
   minSize:     { w: 240, h: 80 },

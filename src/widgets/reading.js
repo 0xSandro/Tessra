@@ -1,5 +1,5 @@
 import { register } from '../widget-registry.js';
-import { escapeHtml } from '../utils.js';
+import { escapeHtml, isSafeUrl } from '../utils.js';
 
 // Reading List — URLs with title, read/unread state, optional per-item
 // progress (0-100%). Add a URL by paste; we try to extract a friendly
@@ -68,8 +68,9 @@ register({
         const li = document.createElement('li');
         li.className = 'reading-item' + (item.read ? ' reading-read' : '');
         li.dataset.id = item.id;
+        const safeUrl = isSafeUrl(item.url) ? item.url : '#';
         const titleHtml = `
-          <a class="reading-title" href="${escapeHtml(item.url)}" rel="noopener" title="${escapeHtml(item.url)}">${escapeHtml(item.title || item.url)}</a>
+          <a class="reading-title" href="${escapeHtml(safeUrl)}" rel="noopener" title="${escapeHtml(item.url)}">${escapeHtml(item.title || item.url)}</a>
           <span class="reading-host">${escapeHtml(hostnameFromUrl(item.url))}</span>`;
         const progressHtml = (settings.showProgress && !item.read) ? `
           <div class="reading-prog">
@@ -121,7 +122,7 @@ register({
 
     function addUrl(raw) {
       const url = ensureProtocol((raw || '').trim());
-      if (!url) return;
+      if (!url || !isSafeUrl(url)) return;
       const host = hostnameFromUrl(url);
       data.items.unshift({
         id: uid(),

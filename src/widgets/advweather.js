@@ -53,7 +53,7 @@ const formatTime = t => t.toLocaleTimeString([], { hour: '2-digit', minute: '2-d
 register({
   type: 'advweather',
   title: 'Advanced Weather',
-  icon: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="3"/><line x1="7" y1="1.5" x2="7" y2="3"/><line x1="1.5" y1="7" x2="3" y2="7"/><line x1="11" y1="3" x2="9.8" y2="4.2"/><line x1="3" y1="11" x2="4.2" y2="9.8"/><path d="M18 11h-1.26A8 8 0 1 0 9 21h9a5 5 0 0 0 0-10z"/></svg>',
+  icon: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="M20 12h2"/><path d="m19.07 4.93-1.41 1.41"/><path d="M15.947 12.65a4 4 0 0 0-5.925-4.128"/><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z"/></svg>',
   category: 'info',
   defaultSize: { w: 340, h: 460 },
   minSize:     { w: 280, h: 320 },

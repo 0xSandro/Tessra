@@ -1,5 +1,5 @@
 import { register } from '../widget-registry.js';
-import { escapeHtml } from '../utils.js';
+import { escapeHtml, isSafeUrl } from '../utils.js';
 import { notionFetch, pageTitle, formatRelativeISO } from './_notion.js';
 
 // Notion Recent Pages — pulls the most-recently-edited pages across
@@ -12,6 +12,7 @@ register({
   icon: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h13l3 3v13H4z"/><path d="M14 4v4h4"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>',
   category: 'integrations',
   subcategory: 'notion',
+  comingSoon: true, // Notion integration isn't fully working yet — greyed out in the catalog
   defaultSize: { w: 360, h: 320 },
   minSize:     { w: 260, h: 200 },
 
@@ -80,9 +81,10 @@ register({
       listEl.innerHTML = data.pages.map(p => {
         const title = pageTitle(p);
         const edited = formatRelativeISO(p.last_edited_time);
+        const pageUrl = isSafeUrl(p.url) ? p.url : '';
         return `
           <li class="nrp-item">
-            <a class="nrp-title" href="${escapeHtml(p.url || '')}" rel="noopener" title="${escapeHtml(title)}">${escapeHtml(title)}</a>
+            <a class="nrp-title" href="${escapeHtml(pageUrl)}" rel="noopener" title="${escapeHtml(title)}">${escapeHtml(title)}</a>
             <span class="nrp-time">${escapeHtml(edited)}</span>
           </li>`;
       }).join('');

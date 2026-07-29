@@ -128,6 +128,18 @@
       </section>
 
       <section class="control-group">
+        <h3>Zoom</h3>
+        <div class="slider-row">
+          <span>Interface scale</span>
+          <input type="range" min="60" max="150" step="5" id="zoom"/>
+          <input type="number" min="60" max="150" step="5" id="zoomN" class="num"/>
+          <span class="unit">%</span>
+          <button class="reset-btn" data-reset="zoom" title="Reset to default" aria-label="Reset"></button>
+        </div>
+        <p class="panel-microhint">Scales the whole page like the browser's own zoom — handy on small or very high-PPI screens.</p>
+      </section>
+
+      <section class="control-group">
         <h3>Surface style</h3>
         <div class="seg-control" data-control="surfaceStyle">
           <button data-value="flat">Flat</button>
@@ -339,6 +351,13 @@
           </div>
         </div>
       </section>
+
+      <section class="control-group">
+        <p class="panel-hint">
+          Send me your layouts on <a href="https://x.com/0xSandro" target="_blank" rel="noopener">X (0xSandro)</a>
+          or mail <a href="mailto:alessandro.steurer@gmail.com">alessandro.steurer@gmail.com</a>.
+        </p>
+      </section>
     </div>
 
     <div class="panel-footer">
@@ -385,7 +404,7 @@
   <template id="tpl-widget">
     <div class="widget" tabindex="0">
       <div class="widget-header">
-        <button class="widget-remove" title="Remove">×</button>
+        <button class="widget-remove" title="Remove" aria-label="Remove widget">×</button>
         <span class="tl-yellow" aria-hidden="true"></span>
         <span class="tl-green" aria-hidden="true"></span>
         <div class="widget-title-wrap">
@@ -407,7 +426,7 @@
             <path d="M8 11V7a4 4 0 0 1 8 0v4"/>
           </svg>
         </button>
-        <button class="widget-settings" title="Settings">
+        <button class="widget-settings" title="Settings" aria-label="Widget settings">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
           </svg>

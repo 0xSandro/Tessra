@@ -26,18 +26,19 @@
     "https://query2.finance.yahoo.com/*",
     "https://gamma-api.polymarket.com/*",
     "https://github-contributions-api.jogruber.de/*",
-    "https://widgets.coingecko.com/*",
-    "https://www.coingecko.com/*",
     "https://speed.cloudflare.com/*",
     "https://air-quality-api.open-meteo.com/*",
     "https://api.wheretheiss.at/*",
     "https://en.wikipedia.org/*",
-    "https://api.notion.com/*"
+    "https://api.notion.com/*",
+    "https://date.nager.at/*",
+    "https://api.alternative.me/*",
+    "https://api.github.com/*"
   ],
-  "content_security_policy": "script-src 'self' https://widgets.coingecko.com; object-src 'self';",
+  "content_security_policy": "script-src 'self'; object-src 'self';",
   "browser_specific_settings": {
     "gecko": {
-      "id": "tessra@local.dev",
+      "id": "tessra@0xsandro.dev",
       "strict_min_version": "109.0"
     }
   }

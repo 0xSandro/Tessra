@@ -52,3 +52,7 @@ import './ontd.js';
 import './notion-db.js';
 import './notion-today.js';
 import './notion-recent.js';
+import './holiday.js';
+import './feargreed.js';
+import './wikirandom.js';
+import './ghtrending.js';

@@ -1,5 +1,5 @@
 import { register } from '../widget-registry.js';
-import { escapeHtml } from '../utils.js';
+import { escapeHtml, isSafeUrl } from '../utils.js';
 import { notionFetch, propertyText, normalizeDatabaseId, localTodayISO } from './_notion.js';
 
 // Notion Today — filtered task-database view: rows where the configured
@@ -13,6 +13,7 @@ register({
   icon: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M8 3v4"/><path d="M16 3v4"/><polyline points="8 14 11 17 16 12"/></svg>',
   category: 'integrations',
   subcategory: 'notion',
+  comingSoon: true, // Notion integration isn't fully working yet — greyed out in the catalog
   defaultSize: { w: 360, h: 340 },
   minSize:     { w: 260, h: 220 },
 
@@ -95,10 +96,11 @@ register({
         const due = props[settings.dueProperty];
         const dueStr = due ? propertyText(due) : '';
         const overdue = due && due.date && due.date.start && due.date.start < localTodayISO();
+        const pageUrl = isSafeUrl(page.url) ? page.url : '';
         return `
-          <li class="ntd-item" data-id="${escapeHtml(page.id)}" data-url="${escapeHtml(page.url || '')}">
+          <li class="ntd-item" data-id="${escapeHtml(page.id)}" data-url="${escapeHtml(pageUrl)}">
             <input type="checkbox" class="ntd-check"/>
-            <a class="ntd-title" href="${escapeHtml(page.url || '')}" rel="noopener">${escapeHtml(title || '(untitled)')}</a>
+            <a class="ntd-title" href="${escapeHtml(pageUrl)}" rel="noopener">${escapeHtml(title || '(untitled)')}</a>
             ${dueStr ? `<span class="ntd-due ${overdue ? 'ntd-overdue' : ''}">${escapeHtml(dueStr)}</span>` : ''}
           </li>`;
       }).join('');

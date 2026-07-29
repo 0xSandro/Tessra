@@ -394,7 +394,6 @@ body.dark-mode .swatch-hex:focus,
 body.dark-mode .panel-footer-link:hover { background: rgba(255,255,255,0.08); }
 
 body.dark-mode .shortcut:hover,
-body.dark-mode .stickies-add:hover,
 body.dark-mode .palette-add:hover,
 body.dark-mode .wc-add:hover,
 body.dark-mode .habit-add:hover,
@@ -1274,6 +1273,7 @@ body.dark-mode .wf-preview { background: rgba(255,255,255,0.04); }
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 .search-form {
   display: flex;
@@ -1354,91 +1354,6 @@ body.edit-mode .shortcut-del { display: block; }
   height: 100%;
   gap: 8px;
 }
-.notes-tabs-bar {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  border-bottom: 1px solid var(--widget-border);
-  padding-bottom: 4px;
-  flex-shrink: 0;
-}
-.notes-tabs-list {
-  display: flex;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
-}
-.notes-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 3px 4px 3px 9px;
-  border-radius: 5px;
-  background: transparent;
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--muted);
-  transition: background 0.12s, color 0.12s;
-  flex-shrink: 0;
-  user-select: none;
-  max-width: 160px;
-}
-.notes-tab:hover { background: rgba(0,0,0,0.05); color: var(--fg); }
-.notes-tab.active {
-  background: var(--accent);
-  color: #fff;
-}
-.notes-tab.active:hover { background: var(--accent); }
-.notes-tab-title {
-  outline: none;
-  border-radius: 3px;
-  padding: 0 3px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 130px;
-}
-.notes-tab-title[contenteditable="true"] {
-  background: rgba(255,255,255,0.25);
-  cursor: text;
-  user-select: text;
-  -webkit-user-select: text;
-  min-width: 14px;
-}
-.notes-tab.active .notes-tab-title[contenteditable="true"] { background: rgba(255,255,255,0.35); }
-.notes-tab:not(.active) .notes-tab-title[contenteditable="true"] { background: rgba(0,0,0,0.08); }
-.notes-tab-del {
-  background: none;
-  border: none;
-  color: inherit;
-  cursor: pointer;
-  font-size: 13px;
-  line-height: 1;
-  padding: 2px 5px;
-  border-radius: 3px;
-  opacity: 0.5;
-  transition: opacity 0.12s, background 0.12s;
-}
-.notes-tab:hover .notes-tab-del,
-.notes-tab.active .notes-tab-del { opacity: 1; }
-.notes-tab-del:hover { background: rgba(0,0,0,0.12); }
-.notes-tab.active .notes-tab-del:hover { background: rgba(255,255,255,0.25); }
-.notes-tab-add {
-  background: none;
-  border: 1px dashed var(--widget-border);
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 13px;
-  padding: 0;
-  border-radius: 4px;
-  width: 26px;
-  height: 22px;
-  flex-shrink: 0;
-}
-.notes-tab-add:hover { color: var(--fg); background: rgba(0,0,0,0.03); }
 .notes-textarea {
   flex: 1;
   min-height: 0;
@@ -1448,8 +1363,6 @@ body.edit-mode .shortcut-del { display: block; }
   background: transparent;
   padding: 0;
 }
-body.dark-mode .notes-tab:hover { background: rgba(255,255,255,0.07); }
-body.dark-mode .notes-tab-del:hover { background: rgba(255,255,255,0.15); }
 
 /* Pomodoro */
 .pomo {
@@ -2312,27 +2225,17 @@ body.dark-mode .sparkline-down { --spark-color: #ef4444; }
   margin-left: 3px;
 }
 
-/* Crypto chart — bare CoinGecko frame. Widget body padding zeroed via the
-   data-type rule below so the frame goes edge to edge of the widget body
-   (only the title bar in edit mode sits above it). */
-.widget[data-type="cryptochart"] > .widget-body { padding: 0; }
-.cgchart-frame {
-  width: 100%;
-  height: 100%;
-  position: relative;
-  display: block;
-  overflow: hidden;
-}
+/* Crypto Chart — currently a "coming soon" placeholder (see cryptochart.js);
+   the widget-body keeps its normal padding and the message just centers in
+   the available space. */
 .cgchart-empty {
-  position: absolute;
-  inset: 0;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
   color: var(--muted);
   font-style: italic;
-  padding: 16px;
   text-align: center;
 }
 
@@ -3863,121 +3766,6 @@ body.dark-mode .counter-reset:hover { background: rgba(255,255,255,0.06); }
 .goal-add:hover { color: var(--fg); background: rgba(0,0,0,0.03); }
 
 /* Sticky Notes Wall */
-.stickies {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  gap: 8px;
-}
-.stickies-add {
-  flex-shrink: 0;
-  width: 100%;
-  background: none;
-  border: 1px dashed var(--widget-border);
-  color: var(--muted);
-  cursor: pointer;
-  padding: 6px;
-  border-radius: 6px;
-  font-size: 12px;
-}
-.stickies-add:hover { color: var(--fg); background: rgba(0,0,0,0.03); }
-.stickies-list {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.stickies-empty {
-  font-size: 12px;
-  color: var(--muted);
-  text-align: center;
-  padding: 16px 8px;
-}
-.sticky-card {
-  position: relative;
-  border-radius: 8px;
-  padding: 10px 12px 14px;
-  min-height: 70px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  transition: box-shadow 0.15s;
-  color: #1f2937;
-  display: flex;
-  flex-direction: column;
-}
-.sticky-card:hover { box-shadow: 0 3px 8px rgba(0,0,0,0.15); }
-.sticky-card.pinned { box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 0 0 1px rgba(0,0,0,0.1); }
-.sticky-card.resizing { box-shadow: 0 3px 10px rgba(0,0,0,0.2); }
-.sticky-actions {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  display: inline-flex;
-  gap: 2px;
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-.sticky-card:hover .sticky-actions,
-.sticky-card.pinned .sticky-actions { opacity: 1; }
-.sticky-pin, .sticky-color, .sticky-del {
-  width: 20px;
-  height: 20px;
-  border: none;
-  background: rgba(255,255,255,0.5);
-  border-radius: 4px;
-  cursor: pointer;
-  color: #1f2937;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  font-size: 13px;
-  line-height: 1;
-  transition: background 0.12s;
-}
-.sticky-pin:hover, .sticky-color:hover, .sticky-del:hover {
-  background: rgba(255,255,255,0.85);
-}
-.sticky-color {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 1px solid rgba(0,0,0,0.15);
-  align-self: center;
-  margin: 3px 3px 3px 0;
-}
-.sticky-del:hover { color: #c00; }
-.sticky-pin svg { display: block; }
-.sticky-text {
-  flex: 1;
-  font-size: 13px;
-  line-height: 1.4;
-  outline: none;
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow: auto;
-  padding-right: 60px; /* leave room for action buttons */
-}
-.sticky-text:empty::before {
-  content: 'Type here…';
-  color: rgba(0,0,0,0.35);
-}
-.sticky-resize {
-  position: absolute;
-  bottom: 2px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 24px;
-  height: 5px;
-  border-radius: 0 0 3px 3px;
-  background: rgba(0,0,0,0.15);
-  cursor: ns-resize;
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-.sticky-card:hover .sticky-resize { opacity: 1; }
-
 /* Calculator */
 .calc {
   display: flex;
@@ -5099,24 +4887,6 @@ body.surface-liquid .sticky-textarea {
   gap: 8px;
   height: 100%;
 }
-.picker-result {
-  font-size: 22px;
-  font-weight: 300;
-  letter-spacing: -0.3px;
-  color: var(--fg);
-  min-height: 28px;
-  text-align: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.picker-result.picker-result-empty { color: var(--muted); }
-@keyframes picker-pulse {
-  0%   { transform: scale(0.85); opacity: 0.35; color: var(--accent); }
-  40%  { transform: scale(1.12); opacity: 1;    color: var(--accent); }
-  100% { transform: scale(1);    opacity: 1;    color: var(--fg); }
-}
-.picker-result.picker-flash { animation: picker-pulse 0.45s ease-out; }
 .picker-pick {
   background: var(--accent);
   color: #fff;
@@ -6223,6 +5993,7 @@ body.panel-left.edit-mode #edit-toggle { right: 16px; }
 }
 .panel-pane.hidden { display: none; }
 .panel-hint { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
+.panel-hint a { color: var(--accent); }
 
 .panel-footer {
   flex-shrink: 0;
@@ -6471,6 +6242,35 @@ body.dark-mode .catalog-search { background: rgba(255,255,255,0.04); }
 .card-star.on svg { fill: var(--accent); }
 .widget-card.fav { border-color: color-mix(in srgb, var(--accent) 35%, var(--panel-border)); }
 body.dark-mode .card-star { color: var(--muted); }
+
+/* Coming-soon cards — widgets registered but not fully working yet. Greyed
+   out and undraggable (see buildCard()'s mousedown guard); a small badge
+   overlays the label so it reads clearly without needing a tooltip. */
+.widget-card.coming-soon {
+  cursor: not-allowed;
+  opacity: 0.45;
+  filter: grayscale(0.6);
+  padding-bottom: 22px;
+}
+.widget-card.coming-soon:hover { background: rgba(0,0,0,0.02); box-shadow: none; }
+.card-badge {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--panel-bg, rgba(0,0,0,0.06));
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+body.dark-mode .card-badge { background: rgba(255,255,255,0.08); }
 
 /* Theme presets — 6 curated palette cards in the Theme tab. Each shows a
    miniature "widget on canvas" preview with the preset's colors so the
@@ -7183,3 +6983,101 @@ body.surface-liquid.dark-mode .theme-select {
   display: flex; align-items: center; justify-content: center;
   font-size: 12px; color: var(--muted);
 }
+
+/* ----- Public Holiday Countdown ----- */
+.hol { display: flex; flex-direction: column; height: 100%; gap: 8px; }
+.hol-hero {
+  flex-shrink: 0; text-align: center; padding: 14px 10px;
+  border-radius: 10px; background: color-mix(in srgb, var(--accent) 9%, transparent);
+}
+.hol-flag { font-size: 20px; line-height: 1; margin-bottom: 2px; }
+.hol-days-row { display: flex; align-items: baseline; justify-content: center; gap: 5px; }
+.hol-days-num { font-size: 36px; font-weight: 700; line-height: 1; color: var(--accent); }
+.hol-days-word { font-size: 13px; font-weight: 600; color: var(--muted); }
+.hol-name { font-size: 14px; font-weight: 600; margin-top: 6px; color: var(--fg); }
+.hol-date { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+.hol-loading, .hol-error {
+  font-size: 12px; color: var(--muted); font-style: italic;
+  padding: 28px 0; text-align: center;
+}
+.hol-error { color: #c53030; font-style: normal; }
+.hol-section-label {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--muted); padding: 0 2px; flex-shrink: 0;
+}
+.hol-list { flex: 0 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.hol-item {
+  display: flex; align-items: center; gap: 8px; font-size: 11.5px;
+  padding: 4px; border-radius: 6px;
+}
+.hol-item:hover { background: rgba(0,0,0,0.04); }
+.hol-item-date {
+  flex-shrink: 0; min-width: 38px; text-align: center; font-size: 10.5px; font-weight: 600;
+  color: var(--muted); background: rgba(0,0,0,0.05); border-radius: 5px; padding: 2px 5px;
+}
+.hol-item-name { color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hol-meta { font-size: 10px; color: var(--muted); font-style: italic; text-align: right; flex-shrink: 0; }
+body.dark-mode .hol-item:hover { background: rgba(255,255,255,0.06); }
+body.dark-mode .hol-item-date { background: rgba(255,255,255,0.08); }
+
+/* ----- Crypto Fear & Greed ----- */
+.fng { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 4px; text-align: center; }
+.fng-gauge-svg { width: 74%; max-width: 200px; height: auto; display: block; }
+.fng-band { fill: none; stroke-width: 12; stroke-linecap: round; }
+.fng-dot-halo { fill: var(--widget-bg); }
+.fng-dot { stroke: var(--widget-bg); stroke-width: 2; }
+.fng-value { font-size: 40px; font-weight: 700; line-height: 1; }
+.fng-label { font-size: 13px; font-weight: 600; margin-top: 2px; }
+.fng-label.fng-error { color: #c53030; font-size: 12px; font-weight: 400; font-style: italic; }
+.fng-meta { font-size: 10px; color: var(--muted); font-style: italic; margin-top: 6px; }
+
+/* ----- Wikipedia Roulette ----- */
+.wr { display: flex; flex-direction: column; height: 100%; gap: 10px; }
+.wr-card { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
+.wr-header { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.wr-logo { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; flex-shrink: 0; background: rgba(0,0,0,0.05); }
+.wr-title { font-size: 14px; font-weight: 600; color: var(--fg); line-height: 1.3; }
+.wr-extract { font-size: 11.5px; color: var(--muted); line-height: 1.5; white-space: pre-wrap; }
+.wr-empty { font-size: 12px; color: var(--muted); font-style: italic; text-align: center; padding: 20px 0; }
+.wr-error { color: #c53030; }
+.wr-divider { flex-shrink: 0; border-top: 1px solid var(--panel-border); }
+.wr-actions { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+.wr-btn {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 7px 10px; border-radius: 8px; border: 1px solid var(--panel-border);
+  background: transparent; color: var(--fg); font-size: 12px; font-weight: 600;
+  text-decoration: none; cursor: pointer;
+}
+.wr-btn:hover { background: rgba(0,0,0,0.04); }
+.wr-btn:disabled { opacity: 0.5; cursor: default; }
+.wr-readmore { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, var(--panel-border)); }
+body.dark-mode .wr-logo { background: rgba(255,255,255,0.08); }
+body.dark-mode .wr-btn:hover { background: rgba(255,255,255,0.08); }
+
+/* ----- GitHub Trending ----- */
+.ght { display: flex; flex-direction: column; height: 100%; gap: 8px; }
+.ght-list { flex: 0 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.ght-item {
+  display: flex; align-items: flex-start; gap: 8px; font-size: 11.5px;
+  padding: 6px 4px; border-radius: 8px;
+}
+.ght-item:hover { background: rgba(0,0,0,0.04); }
+.ght-avatar { width: 20px; height: 20px; border-radius: 5px; flex-shrink: 0; margin-top: 1px; background: rgba(0,0,0,0.06); }
+.ght-info { flex: 1; min-width: 0; }
+.ght-name { color: var(--fg); font-weight: 600; text-decoration: none; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ght-name:hover { text-decoration: underline; }
+.ght-desc {
+  color: var(--muted); font-size: 10.5px; margin-top: 1px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ght-sub { display: flex; align-items: center; gap: 10px; margin-top: 3px; }
+.ght-lang { display: flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--muted); }
+.ght-lang-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.ght-stars { display: flex; align-items: center; gap: 3px; color: var(--muted); font-size: 10.5px; }
+.ght-empty { font-size: 12px; color: var(--muted); font-style: italic; text-align: center; padding: 12px; }
+.ght-error { color: #c53030; }
+.ght-meta { font-size: 10px; color: var(--muted); font-style: italic; text-align: right; flex-shrink: 0; }
+body.dark-mode .ght-item:hover { background: rgba(255,255,255,0.06); }
+body.dark-mode .ght-avatar { background: rgba(255,255,255,0.08); }
+
+body.dark-mode .wr-shuffle:hover { background: rgba(255,255,255,0.08); }

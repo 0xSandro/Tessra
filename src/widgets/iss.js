@@ -48,7 +48,7 @@ function formatLon(lon) {
 register({
   type: 'iss',
   title: 'ISS Tracker',
-  icon: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M9 8l-3-3"/><path d="M15 16l3 3"/><path d="M9 16l-3 3"/><path d="M15 8l3-3"/></svg>',
+  icon: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="10" x2="12" y2="4"/><circle cx="12" cy="3" r="1" fill="currentColor" stroke="none"/><rect x="9" y="10" width="6" height="6" rx="1.2"/><line x1="9" y1="13" x2="7" y2="13"/><rect x="1" y="11.3" width="6" height="3.4" rx="0.6"/><line x1="15" y1="13" x2="17" y2="13"/><rect x="17" y="11.3" width="6" height="3.4" rx="0.6"/></svg>',
   category: 'info',
   defaultSize: { w: 320, h: 280 },
   minSize:     { w: 240, h: 220 },

@@ -24,7 +24,7 @@ function formatTime(d) {
 register({
   type: 'sunset',
   title: 'Sunset Countdown',
-  icon: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="4"/><line x1="12" y1="4" x2="12" y2="2"/><line x1="6" y1="6" x2="4.5" y2="4.5"/><line x1="18" y1="6" x2="19.5" y2="4.5"/><line x1="3" y1="20" x2="21" y2="20"/><polyline points="9 17 12 20 15 17"/></svg>',
+  icon: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18a6 6 0 0 1 12 0"/><line x1="2" y1="18" x2="22" y2="18"/><line x1="12" y1="6" x2="12" y2="8.5"/><line x1="5.5" y1="10.5" x2="7.2" y2="12.2"/><line x1="18.5" y1="10.5" x2="16.8" y2="12.2"/></svg>',
   category: 'time',
   defaultSize: { w: 280, h: 220 },
   minSize:     { w: 220, h: 160 },

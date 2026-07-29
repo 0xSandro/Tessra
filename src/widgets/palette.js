@@ -1,4 +1,13 @@
 import { register } from '../widget-registry.js';
+import { escapeHtml } from '../utils.js';
+
+// Imported/shared layouts (Presets → Import/Paste) write data.colors
+// directly, bypassing the add-flow's regex check below — re-validate at
+// render time so a crafted preset can't smuggle in something other than a
+// plain hex color via the swatch's inline `style` or text content.
+function isHexColor(v) {
+  return typeof v === 'string' && /^#[0-9A-Fa-f]{6}$/.test(v);
+}
 
 register({
   type: 'palette',
@@ -30,11 +39,12 @@ register({
     function renderAll() {
       grid.innerHTML = '';
       data.colors.forEach((color, idx) => {
+        const hex = isHexColor(color.hex) ? color.hex : '#000000';
         const item = document.createElement('div');
         item.className = 'palette-item';
         item.innerHTML = `
-          <button class="palette-swatch" style="background:${color.hex}" title="Copy ${color.hex}"></button>
-          <div class="palette-hex">${color.hex}</div>
+          <button class="palette-swatch" style="background:${hex}" title="Copy ${hex}"></button>
+          <div class="palette-hex">${escapeHtml(hex)}</div>
           <button class="palette-del" title="Remove">×</button>`;
         const swatch = item.querySelector('.palette-swatch');
         const hexEl  = item.querySelector('.palette-hex');
