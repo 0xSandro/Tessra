@@ -112,17 +112,66 @@ function nextAutoTitle(type) {
 
 function defaultState() {
   const widgets = [
-    makeWidget('clock',     { x: 40,  y: 80,  z: 1 }),
-    makeWidget('search',    { x: 340, y: 80,  z: 2 }),
-    makeWidget('shortcuts', { x: 40,  y: 240, z: 3, data: { items: [
-      { label: 'GitHub',      url: 'https://github.com' },
-      { label: 'Hacker News', url: 'https://news.ycombinator.com' },
-      { label: 'YouTube',     url: 'https://youtube.com' }
-    ]}}),
-    makeWidget('todo',  { x: 520, y: 180, z: 4 }),
-    makeWidget('notes', { x: 860, y: 180, z: 5, title: 'Notes 1' })
+    makeWidget('moon',     { x: 300, y: 400, w: 220, h: 280, z: 5 }),
+    makeWidget('clock',    { x: 520, y: 160, w: 360, h: 160, z: 7, settings: { watchface: 'flip', format: '24h', showSeconds: true } }),
+    makeWidget('weather',  { x: 200, y: 120, w: 300, h: 260, z: 8, settings: { location: 'Vienna', units: 'celsius', showForecast: true } }),
+    makeWidget('clipboard',{ x: 900, y: 120, w: 240, h: 200, z: 9 }),
+    makeWidget('ontd',     { x: 1160, y: 120, w: 320, h: 600, z: 13, settings: { type: 'events', count: 5 } }),
+    makeWidget('dayyear',  { x: 540, y: 340, w: 300, h: 180, z: 15, settings: { showRemaining: false, showWeek: true } }),
+    makeWidget('todo',     { x: 540, y: 540, w: 300, h: 220, z: 25 }),
+    makeWidget('sunset',   { x: 860, y: 340, w: 260, h: 180, z: 26, settings: { location: 'Vienna' } }),
+    makeWidget('timer',    { x: 880, y: 540, w: 260, h: 180, z: 35, settings: { minutes: 5, seconds: 0 } })
   ];
-  return { maxZ: widgets.length, widgets, theme: defaultTheme(), favorites: [], quickSpawn: ['stickies'], onboardingComplete: false, integrations: { notion: { token: '' } } };
+  const theme = Object.assign(defaultTheme(), {
+    bgType: 'image',
+    bgImage: 'assets/default-bg.jpg',
+    bgImageName: 'chris-lutke-VMJGmTuRVFs-unsplash.jpg',
+    bgImageWidth: 1920,
+    bgImageHeight: 1280,
+    widgetBg: '#fafafa',
+    widgetBorder: '#d4d4d4',
+    accent: '#1a1a1a',
+    surfaceStyle: 'flat',
+    darkBgColor: '#0a0a0a',
+    darkWidgetBg: '#171717',
+    darkWidgetBorder: '#404040'
+  });
+  return { maxZ: 35, widgets, theme, favorites: [], quickSpawn: ['stickies'], onboardingComplete: false, integrations: { notion: { token: '' } } };
+}
+
+// A layout's x/y/w/h are absolute pixels captured on whatever screen it was
+// designed on — the shipped default, or a layout someone else exported and
+// sent over. On a smaller/older display those coordinates can run off the
+// right or bottom edge. This scales the whole layout down (uniformly, never
+// up) to fit the current viewport the first time it's shown, so a big-screen
+// layout still looks intentional on a small one instead of requiring the
+// user to scroll on first launch. Only called right after a layout is
+// freshly loaded (fresh install, import, paste) — never on a normal reload —
+// so it can't fight a user's own later resizes that intentionally exceed the
+// viewport.
+function fitLayoutToViewport(s) {
+  if (!s.widgets.length) return;
+  const vw = window.innerWidth  / zoomFactor();
+  const vh = window.innerHeight / zoomFactor();
+  // A not-yet-laid-out window can briefly report 0 (or another bogus tiny
+  // value) for its own dimensions. Trusting that would compute a negative
+  // scale and fling every widget toward negative/garbage coordinates instead
+  // of leaving them alone — bail out unless the viewport looks real.
+  if (!(vw >= 200) || !(vh >= 200)) return;
+  const maxX = Math.max(...s.widgets.map(w => w.x + w.w));
+  const maxY = Math.max(...s.widgets.map(w => w.y + w.h));
+  const MARGIN = 24;
+  const scale = Math.min(1, (vw - MARGIN) / maxX, (vh - MARGIN) / maxY);
+  if (!(scale > 0 && scale < 1)) return;   // already fits, or not a usable scale factor
+  s.widgets.forEach(w => {
+    const def = registry.get(w.type);
+    const minW = def?.minSize?.w || 0;
+    const minH = def?.minSize?.h || 0;
+    w.x = snap(w.x * scale);
+    w.y = snap(w.y * scale);
+    w.w = snap(Math.max(minW, w.w * scale));
+    w.h = snap(Math.max(minH, w.h * scale));
+  });
 }
 
 // Schema for the Integrations side-panel pane. Each provider has a name + one
@@ -2455,6 +2504,7 @@ async function importLayoutFromFile(file) {
   // before any further action preserves the import.
   state = migrate(stateLike);
   if (!state.theme) state.theme = defaultTheme();
+  fitLayoutToViewport(state);
 
   applyTheme();
   state.widgets.forEach(renderWidget);
@@ -2570,6 +2620,7 @@ async function pasteShareString() {
   clearSnapGuides();
   state = migrate(stateLike);
   if (!state.theme) state.theme = defaultTheme();
+  fitLayoutToViewport(state);
   applyTheme();
   state.widgets.forEach(renderWidget);
   populateCatalog();
@@ -2749,6 +2800,9 @@ function setupCommandPalette() {
     activeIdx = 0;
     render();
     setTimeout(() => input.focus(), 0);
+    // Lets the guided tour's ⌘K step advance the instant the user actually
+    // triggers the palette, instead of requiring a separate "Next" click.
+    document.dispatchEvent(new CustomEvent('tessra:palette-opened'));
   }
   function render() {
     const q = input.value.trim();
@@ -2823,6 +2877,13 @@ function setupCommandPalette() {
 // it so the modal never reappears. Existing users (whose state already has
 // other fields) get auto-skipped via migrate() defaulting the flag to true.
 
+// The tour changes theme state directly (bypassing the Theme tab's own
+// inputs), so the panel's controls need an explicit nudge to catch up —
+// same hook the preset-apply flow uses for the same reason.
+function syncThemePanel() {
+  if (typeof window._refreshThemePanel === 'function') window._refreshThemePanel();
+}
+
 const TOUR_STEPS = [
   {
     target: () => document.getElementById('edit-toggle'),
@@ -2834,7 +2895,10 @@ const TOUR_STEPS = [
     advanceOn: { event: 'click', selector: '#edit-toggle' }
   },
   {
-    target: () => document.querySelector('#side-panel .panel-tab[data-tab="widgets"]'),
+    // Spotlight the whole panel (not just the tab) — the catalog list below
+    // the tab is exactly what this step asks the user to drag from, so it
+    // shouldn't sit dimmed under the rest of the overlay.
+    target: () => document.getElementById('side-panel'),
     placement: 'left',
     html: 'The <strong>Widgets</strong> tab lists everything you can add, grouped by category. <strong>Drag a card onto the page</strong> to place a widget.',
     before: () => { setEditMode(true); selectPanelTab('widgets'); },
@@ -2851,15 +2915,18 @@ const TOUR_STEPS = [
   {
     target: null,
     placement: 'center',
-    html: 'Press <kbd>⌘K</kbd> (or <kbd>Ctrl+K</kbd>) anywhere to open the <strong>command palette</strong> — fuzzy-search every widget and action in one place.'
+    html: 'Press <kbd>⌘K</kbd> (or <kbd>Ctrl+K</kbd>) anywhere to open the <strong>command palette</strong> — fuzzy-search every widget and action in one place.',
+    // Advances the moment the user actually opens the palette, not just on
+    // a "Next" click — dispatched from setupCommandPalette()'s open().
+    advanceOn: { event: 'tessra:palette-opened' }
   },
   {
     target: null,
     placement: 'center',
     html: 'Almost done. Pick a starting theme:',
     choices: [
-      { label: '☀ Light', run: () => { state.theme.darkMode = false; applyTheme(); } },
-      { label: '☾ Dark',  run: () => { state.theme.darkMode = true;  applyTheme(); } }
+      { label: '☀ Light', run: () => { state.theme.darkMode = false; applyTheme(); syncThemePanel(); } },
+      { label: '☾ Dark',  run: () => { state.theme.darkMode = true;  applyTheme(); syncThemePanel(); } }
     ],
     // Don't finish the tour after this choice — go on to the surface step
     choiceAdvances: true
@@ -2884,6 +2951,7 @@ const TOUR_STEPS = [
         btn.addEventListener('click', () => {
           state.theme.surfaceStyle = btn.dataset.value;
           applyTheme();
+          syncThemePanel();
           finish();
         });
       });
@@ -3000,9 +3068,15 @@ function startGuidedTour() {
   const tour = document.getElementById('onboarding-tour');
   if (!tour) { finishOnboarding(); return; }
   document.getElementById('onboarding-modal')?.classList.add('hidden');
+  const balloon   = tour.querySelector('.tour-balloon');
+  // Keep the balloon invisible until the first show() actually positions it.
+  // Steps with a before() hook (like step 1) await a ~280ms panel-transition
+  // delay before positionBalloon() ever runs — without this, the balloon
+  // would flash at its unset (0,0 / top-left) position for that whole
+  // window the instant .hidden comes off the tour container below.
+  balloon.style.visibility = 'hidden';
   tour.classList.remove('hidden');
 
-  const balloon   = tour.querySelector('.tour-balloon');
   const spotlight = tour.querySelector('.tour-spotlight');
   const textEl    = tour.querySelector('.tour-text');
   const choicesEl = tour.querySelector('.tour-choices');
@@ -3208,14 +3282,17 @@ function setupPageMarquee() {
 
 (async function init() {
   let loaded = await store.get(STORAGE_KEY);
+  let isFreshLoad = false;
   if (!loaded) {
     const legacy = await store.get(LEGACY_KEY);
     loaded = legacy ? migrate(legacy) : defaultState();
+    isFreshLoad = true;
   } else {
     loaded = migrate(loaded);
   }
   state = loaded;
   if (!state.theme) state.theme = defaultTheme();
+  if (isFreshLoad) fitLayoutToViewport(state);
   applyTheme();
   populateCatalog();
   populateIntegrationsPane();

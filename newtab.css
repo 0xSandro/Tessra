@@ -385,6 +385,7 @@ body.dark-mode .calc-btn:hover { background-color: rgba(255,255,255,0.09); }
 body.dark-mode .calc-btn.calc-fn { background: rgba(255,255,255,0.08); }
 body.dark-mode .seg-control { background: rgba(255,255,255,0.06); }
 body.dark-mode .toggle { background: rgba(255,255,255,0.18); }
+body.dark-mode .toggle:checked { background: var(--accent); }
 body.dark-mode .reset-btn:hover,
 body.dark-mode .widget-settings:hover,
 body.dark-mode .widget-remove:hover,
@@ -554,9 +555,18 @@ body.bg-image   {
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
 }
-/* The window-style header sits behind the badge — bump it down slightly so
-   the title isn't covered up while stale. */
-.widget.stale .widget-header { padding-right: 78px; }
+/* When the window-style header is visible (edit mode, or the always-on-
+   headers theme option), it has its own cluster of buttons (remove/lock/
+   zorder/settings) ending at the same top-right corner the badge sits in —
+   at ~84px wide the badge was drawn right over the remove "×", which stayed
+   clickable underneath (pointer-events:none on the badge) but was hidden
+   from view. Push the badge below the header instead of trying to carve out
+   header padding for it, since the badge's width can vary with its text
+   ("offline" vs "offline · stale") while the header height doesn't. */
+body.edit-mode .widget.stale::before,
+body.always-headers .widget.stale::before {
+  top: 39px;
+}
 body.is-offline .widget.stale::before { content: 'offline'; }
 .widget:hover { box-shadow: var(--widget-shadow-hover); }
 .widget.dragging { opacity: 0.85; box-shadow: var(--widget-shadow-hover); cursor: grabbing; }
@@ -5323,6 +5333,10 @@ body.dark-mode .tour-choice:hover { background: rgba(255, 255, 255, 0.1); }
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
+  /* .tour-choices (the parent) is a row-flex container. Without an explicit
+     width here, this grid sizes to its own fit-content instead of filling
+     the available row, roughly halving every card's width. */
+  width: 100%;
 }
 .tour-surface {
   background: transparent;
@@ -5749,6 +5763,16 @@ body.edit-mode #edit-toggle {
   right: 336px; /* sits just outside the open side panel */
 }
 body.edit-mode #edit-toggle svg { stroke: #fff; }
+/* In dark mode --fg is near-white (the "inverted pill" background is still
+   correct), but the light `color`/`stroke` above then sits white-on-white.
+   Also needs to win over the surface-glass/liquid dark-mode background
+   override further up this file — same specificity, so placed later. */
+body.dark-mode.edit-mode #edit-toggle {
+  background: var(--fg);
+  color: #18181b;
+  border-color: var(--fg);
+}
+body.dark-mode.edit-mode #edit-toggle svg { stroke: #18181b; }
 
 /* Quick-access toolbar — round spawn buttons stacked under the Edit toggle.
    Each pinned widget gets a 40 px round button. The (+) at the bottom opens
@@ -7079,5 +7103,27 @@ body.dark-mode .wr-btn:hover { background: rgba(255,255,255,0.08); }
 .ght-meta { font-size: 10px; color: var(--muted); font-style: italic; text-align: right; flex-shrink: 0; }
 body.dark-mode .ght-item:hover { background: rgba(255,255,255,0.06); }
 body.dark-mode .ght-avatar { background: rgba(255,255,255,0.08); }
+
+/* ----- Hacker News ----- */
+.hn { display: flex; flex-direction: column; height: 100%; gap: 8px; }
+.hn-list { flex: 0 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.hn-item {
+  display: flex; align-items: flex-start; gap: 8px; font-size: 11.5px;
+  padding: 6px 4px; border-radius: 8px;
+}
+.hn-item:hover { background: rgba(0,0,0,0.04); }
+.hn-rank { color: var(--muted); font-weight: 600; flex-shrink: 0; width: 16px; text-align: right; font-variant-numeric: tabular-nums; }
+.hn-info { flex: 1; min-width: 0; }
+.hn-title { color: var(--fg); font-weight: 600; text-decoration: none; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hn-title:hover { text-decoration: underline; }
+.hn-sub { display: flex; align-items: center; gap: 8px; margin-top: 2px; font-size: 10.5px; color: var(--muted); }
+.hn-points { flex-shrink: 0; }
+.hn-author { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hn-comments { color: var(--muted); text-decoration: none; flex-shrink: 0; margin-left: auto; }
+.hn-comments:hover { color: var(--accent); text-decoration: underline; }
+.hn-empty { font-size: 12px; color: var(--muted); font-style: italic; text-align: center; padding: 12px; }
+.hn-error { color: #c53030; }
+.hn-meta { font-size: 10px; color: var(--muted); font-style: italic; text-align: right; flex-shrink: 0; }
+body.dark-mode .hn-item:hover { background: rgba(255,255,255,0.06); }
 
 body.dark-mode .wr-shuffle:hover { background: rgba(255,255,255,0.08); }

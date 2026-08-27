@@ -17,7 +17,7 @@ for the AMO review notes and for anyone auditing the extension.
 
 ## Host permissions
 
-Each is a widget-specific API the corresponding widget fetches directly —
+Each is a widget-specific API the corresponding widget fetches directly,
 none of these are contacted unless that widget is actually placed on the
 board.
 
@@ -29,16 +29,17 @@ board.
 | `query1.finance.yahoo.com`, `query2.finance.yahoo.com` | Stocks, ETFs, Forex, Commodities (shared quote helper) |
 | `gamma-api.polymarket.com` | Polymarket |
 | `api.github.com` | GitHub Trending |
+| `hn.algolia.com` | Hacker News |
 | `github-contributions-api.jogruber.de` | GitHub Commits (contribution graph) |
 | `speed.cloudflare.com` | Internet Speed Test |
 | `api.wheretheiss.at` | ISS Tracker |
 | `en.wikipedia.org` | On This Day, Wikipedia Roulette |
-| `api.notion.com` | Notion Database / Notion Today / Notion Recent — only contacted if the user has configured their own Notion integration token |
+| `api.notion.com` | Notion Database / Notion Today / Notion Recent, only contacted if the user has configured their own Notion integration token |
 | `date.nager.at` | Public Holiday Countdown |
 | `api.alternative.me` | Crypto Fear & Greed |
 
 ## Content Security Policy
 
-`script-src 'self'; object-src 'self';` — no remote script execution. (An
+`script-src 'self'; object-src 'self';`, no remote script execution. (An
 earlier version loaded a CoinGecko embed script for a chart widget; that
 widget has been pulled entirely and the CSP exception removed with it.)

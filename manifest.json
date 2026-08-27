@@ -2,11 +2,12 @@
   "manifest_version": 2,
   "name": "Tessra - Custom Starting Page",
   "short_name": "Tessra",
-  "version": "0.2.0",
-  "description": "Tessra — a lightweight, customizable starting page with placeable widgets and themes.",
+  "version": "1.0.0",
+  "description": "A fast, private new-tab dashboard: drag and drop 50+ widgets (weather, crypto, GitHub, to-dos, and more) onto a fully themeable board. No account, no tracking.",
   "icons": {
     "48": "icons/icon-48.svg",
-    "96": "icons/icon-96.svg"
+    "96": "icons/icon-96.svg",
+    "128": "icons/icon-128.png"
   },
   "chrome_url_overrides": {
     "newtab": "newtab.html"
@@ -33,13 +34,14 @@
     "https://api.notion.com/*",
     "https://date.nager.at/*",
     "https://api.alternative.me/*",
-    "https://api.github.com/*"
+    "https://api.github.com/*",
+    "https://hn.algolia.com/*"
   ],
   "content_security_policy": "script-src 'self'; object-src 'self';",
   "browser_specific_settings": {
     "gecko": {
-      "id": "tessra@0xsandro.dev",
-      "strict_min_version": "109.0"
+      "id": "tessra@0xsandro.net",
+      "strict_min_version": "126.0"
     }
   }
 }

@@ -56,3 +56,4 @@ import './holiday.js';
 import './feargreed.js';
 import './wikirandom.js';
 import './ghtrending.js';
+import './hackernews.js';

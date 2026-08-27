@@ -16,7 +16,11 @@ register({
   icon: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>',
   category: 'time',
   defaultSize: { w: 280, h: 140 },
-  minSize:     { w: 160, h: 80  },
+  // Shared across every watchface (registry has no per-face minSize hook).
+  // Must fit the widest face's worst case: Flip Clock with seconds shown
+  // (H:M:S digit groups + AM/PM + date row) — measured to need ~336x100px
+  // before it starts clipping horizontally/vertically.
+  minSize:     { w: 340, h: 110 },
   defaultData: () => ({}),
 
   defaultSettings: () => ({
