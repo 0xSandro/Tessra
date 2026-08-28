@@ -123,11 +123,6 @@ function defaultState() {
     makeWidget('timer',    { x: 880, y: 540, w: 260, h: 180, z: 35, settings: { minutes: 5, seconds: 0 } })
   ];
   const theme = Object.assign(defaultTheme(), {
-    bgType: 'image',
-    bgImage: 'assets/default-bg.jpg',
-    bgImageName: 'chris-lutke-VMJGmTuRVFs-unsplash.jpg',
-    bgImageWidth: 1920,
-    bgImageHeight: 1280,
     widgetBg: '#fafafa',
     widgetBorder: '#d4d4d4',
     accent: '#1a1a1a',
@@ -2926,7 +2921,25 @@ const TOUR_STEPS = [
     html: 'Almost done. Pick a starting theme:',
     choices: [
       { label: '☀ Light', run: () => { state.theme.darkMode = false; applyTheme(); syncThemePanel(); } },
-      { label: '☾ Dark',  run: () => { state.theme.darkMode = true;  applyTheme(); syncThemePanel(); } }
+      // Dark doesn't just flip the darkMode flag — it swaps in a whole
+      // cohesive dark palette (Solarized-based, purple accent, plain dots
+      // instead of the default background photo) so picking Dark in the
+      // tour looks intentional rather than the light theme's colors inverted.
+      { label: '☾ Dark',  run: () => {
+        Object.assign(state.theme, {
+          darkMode: true,
+          bgType: 'dots',
+          bgColor: '#fdf6e3',
+          widgetBg: '#eee8d5',
+          widgetBorder: '#93a1a1',
+          accent: '#6927D3',
+          darkBgColor: '#002b36',
+          darkWidgetBg: '#073642',
+          darkWidgetBorder: '#586e75'
+        });
+        applyTheme();
+        syncThemePanel();
+      } }
     ],
     // Don't finish the tour after this choice — go on to the surface step
     choiceAdvances: true
