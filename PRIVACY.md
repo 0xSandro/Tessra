@@ -66,6 +66,11 @@ services a given install of Tessra can contact (matching its
 - **Nager.Date** (`date.nager.at`) => public holiday countdown widget. The
   country you select is sent as part of the request.
 - **Alternative.me** (`api.alternative.me`) => Crypto Fear & Greed widget.
+- **Google favicon service** (`www.google.com/s2/favicons`) => Shortcuts
+  widget icons. The domain of each saved shortcut is sent to fetch its icon.
+  If that fails, the icon is requested from the shortcut's own site
+  (`<site>/favicon.ico`). Shortcuts set to an emoji or built-in icon make no
+  request at all.
 
 None of these requests carry any identifying information beyond what's
 inherent to an HTTP request (your IP address) and whatever you've explicitly

@@ -12,7 +12,7 @@ for the AMO review notes and for anyone auditing the extension.
 | `history` | Browser Stats | Its "most visited" section falls back to `history.search` when `topSites` isn't available/enough data exists. |
 | `bookmarks` | Bookmarks, Browser Stats | Bookmarks widget lists/opens a chosen bookmark folder (`bookmarks.getTree`, `bookmarks.getChildren`). Browser Stats shows a bookmark count. |
 | `sessions` | Recent Tabs, Browser Stats | Recent Tabs lists and restores recently-closed tabs/windows (`sessions.getRecentlyClosed`, `sessions.restore`). Browser Stats shows a recently-closed count. |
-| `topSites` | Browser Stats | "Most visited sites" section (`topSites.get`). |
+| `topSites` | Browser Stats, Shortcuts | Browser Stats: "Most visited sites" section (`topSites.get`). Shortcuts: "Add from most visited…" suggestions in the widget's settings, read only when the user opens that list. |
 | `notifications` | Alarms | Fires an OS notification when an alarm goes off while the tab isn't focused. |
 
 ## Host permissions

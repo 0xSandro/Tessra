@@ -104,13 +104,11 @@ register({
       <div class="crypto">
         <div class="crypto-list"></div>
         <div class="crypto-footer">
-          <button class="crypto-add">+ Add coin</button>
           <span class="crypto-updated"></span>
         </div>
       </div>`;
     const listEl    = body.querySelector('.crypto-list');
     const updatedEl = body.querySelector('.crypto-updated');
-    const addBt     = body.querySelector('.crypto-add');
 
     function getCoinIds() {
       return (settings.coins || '')
@@ -129,7 +127,7 @@ register({
     function paint() {
       const ids = getCoinIds();
       if (!ids.length) {
-        listEl.innerHTML = '<div class="crypto-empty">No coins added. Use “+ Add coin” below.</div>';
+        listEl.innerHTML = '<div class="crypto-empty">No coins added. Add coin IDs in the widget settings.</div>';
         updatedEl.textContent = '';
         return;
       }
@@ -233,18 +231,6 @@ register({
         ctx.save();
       }
     }
-
-    addBt.addEventListener('click', async () => {
-      const input = prompt('CoinGecko ID (e.g. bitcoin, ethereum, dogecoin):');
-      if (!input) return;
-      const id = input.trim().toLowerCase();
-      if (!id) return;
-      const ids = getCoinIds();
-      if (ids.includes(id)) return;
-      setCoinIds([...ids, id]);
-      data.prices = null; // force refetch with the new id
-      refresh();
-    });
 
     // Periodic background refresh
     const intervalMs = Math.max(30, settings.refreshInterval || 60) * 1000;

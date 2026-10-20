@@ -2,11 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Tessra</title>
+  <title>New Tab</title>
   <link rel="stylesheet" href="newtab.css" />
 </head>
 <body>
-  <div id="board"><!-- widgets rendered here --></div>
+  <!-- #stage is a zero-size point pinned to the screen center; widget x/y are
+       offsets from it (see stageRect() in main.js). -->
+  <div id="board"><div id="stage"><!-- widgets rendered here --></div></div>
 
   <!-- Snap guides overlay — pink lines drawn when a dragged widget aligns
        with another widget's edge or the viewport midlines. -->
@@ -73,6 +75,16 @@
     <span class="edit-label">Edit</span>
   </button>
   <div id="quick-access" aria-label="Quick spawn"></div>
+
+  <div id="zoom-controls" role="group" aria-label="Zoom">
+    <button id="zoom-out" class="zoom-btn" title="Zoom out" aria-label="Zoom out">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="12" x2="18" y2="12"/></svg>
+    </button>
+    <button id="zoom-level" class="zoom-level" title="Reset zoom to 100%" aria-label="Reset zoom">100%</button>
+    <button id="zoom-in" class="zoom-btn" title="Zoom in" aria-label="Zoom in">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="12" x2="18" y2="12"/><line x1="12" y1="6" x2="12" y2="18"/></svg>
+    </button>
+  </div>
   <div id="quick-picker" class="hidden" role="dialog" aria-label="Pin widget to quick access"></div>
 
   <aside id="side-panel" aria-hidden="true">
@@ -115,32 +127,34 @@
 
     <div class="panel-pane hidden" data-pane="theme">
       <section class="control-group">
-        <h3>Theme presets</h3>
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 4.6 4.6 1.9-4.6 1.9L12 16l-1.9-4.6-4.6-1.9 4.6-1.9z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>
+          Presets
+        </h3>
         <div class="theme-presets-grid" id="theme-presets-grid"></div>
         <p class="panel-microhint">One click applies a coordinated palette and surface style.</p>
       </section>
 
       <section class="control-group">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>
+          Appearance
+        </h3>
         <label class="row toggle-row">
           <span>Dark mode</span>
           <input type="checkbox" id="darkMode" class="toggle"/>
         </label>
-      </section>
-
-      <section class="control-group">
-        <h3>Zoom</h3>
-        <div class="slider-row">
-          <span>Interface scale</span>
-          <input type="range" min="60" max="150" step="5" id="zoom"/>
-          <input type="number" min="60" max="150" step="5" id="zoomN" class="num"/>
-          <span class="unit">%</span>
-          <button class="reset-btn" data-reset="zoom" title="Reset to default" aria-label="Reset"></button>
+        <div class="row">
+          <span>Accent color</span>
+          <div class="color-control" data-key="accent"></div>
+          <button class="reset-btn" data-reset="accent" title="Reset to default" aria-label="Reset"></button>
         </div>
-        <p class="panel-microhint">Scales the whole page like the browser's own zoom — handy on small or very high-PPI screens.</p>
-      </section>
-
-      <section class="control-group">
-        <h3>Surface style</h3>
+        <label class="row toggle-row">
+          <span>Hide buttons until hovered</span>
+          <input type="checkbox" id="autoHideControls" class="toggle"/>
+        </label>
+        <p class="panel-microhint">The Edit, quick-access and zoom buttons fade out and reappear when your pointer comes near their corner.</p>
+        <div class="cg-sub">Surface style</div>
         <div class="seg-control" data-control="surfaceStyle">
           <button data-value="flat">Flat</button>
           <button data-value="glass">Glass</button>
@@ -164,37 +178,10 @@
       </section>
 
       <section class="control-group">
-        <h3>Typography</h3>
-        <div class="row">
-          <span>Font</span>
-          <select id="fontFamily" class="theme-select">
-            <option value="system">System default</option>
-            <option value="inter">Inter</option>
-            <option value="geist">Geist</option>
-            <option value="jetbrains">JetBrains Mono</option>
-            <option value="serif">Serif</option>
-            <option value="mono">Monospace</option>
-            <option value="custom">Custom upload…</option>
-          </select>
-          <button class="reset-btn" data-reset="fontFamily" title="Reset to default" aria-label="Reset"></button>
-        </div>
-        <div class="upload-row" data-show="fontFamily:custom">
-          <button type="button" class="upload-btn" id="fontUploadBtn">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/>
-              <line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-            <span>Choose .woff2 / .woff / .ttf</span>
-          </button>
-          <button type="button" class="upload-btn" id="fontUploadClear" disabled>Clear</button>
-          <input type="file" id="fontUploadFile" accept=".woff2,.woff,.ttf,.otf,font/woff2,font/woff,font/ttf,font/otf" hidden/>
-        </div>
-        <p class="panel-microhint" data-show="fontFamily:inter,geist,jetbrains">If the font isn't installed on your system, it falls back to system fonts. Use custom upload to bundle a specific font.</p>
-      </section>
-
-      <section class="control-group">
-        <h3>Background</h3>
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>
+          Background
+        </h3>
         <div class="seg-control" data-control="bgType">
           <button data-value="dots">Dotted</button>
           <button data-value="color">Color</button>
@@ -235,16 +222,10 @@
       </section>
 
       <section class="control-group">
-        <h3>Accent</h3>
-        <div class="row">
-          <span>Color</span>
-          <div class="color-control" data-key="accent"></div>
-          <button class="reset-btn" data-reset="accent" title="Reset to default" aria-label="Reset"></button>
-        </div>
-      </section>
-
-      <section class="control-group">
-        <h3>Widget</h3>
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>
+          Widgets
+        </h3>
         <label class="row toggle-row">
           <span>Window-style headers</span>
           <input type="checkbox" id="showHeaders" class="toggle"/>
@@ -253,6 +234,7 @@
           <span>Traffic-light dots</span>
           <input type="checkbox" id="trafficLights" class="toggle"/>
         </label>
+        <div class="cg-sub">Colors</div>
         <div class="row">
           <span>Fill</span>
           <div class="color-control" data-key="widgetBg"></div>
@@ -263,6 +245,7 @@
           <div class="color-control" data-key="widgetBorder"></div>
           <button class="reset-btn" data-reset="widgetBorder" title="Reset to default" aria-label="Reset"></button>
         </div>
+        <div class="cg-sub">Shape</div>
         <div class="slider-row">
           <span>Border width</span>
           <input type="range" min="0" max="4" step="1" id="widgetBorderWidth"/>
@@ -287,6 +270,39 @@
       </section>
 
       <section class="control-group">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+          Text
+        </h3>
+        <div class="row">
+          <span>Font</span>
+          <select id="fontFamily" class="theme-select">
+            <option value="system">System default</option>
+            <option value="inter">Inter</option>
+            <option value="geist">Geist</option>
+            <option value="jetbrains">JetBrains Mono</option>
+            <option value="serif">Serif</option>
+            <option value="mono">Monospace</option>
+            <option value="custom">Custom upload…</option>
+          </select>
+          <button class="reset-btn" data-reset="fontFamily" title="Reset to default" aria-label="Reset"></button>
+        </div>
+        <div class="upload-row" data-show="fontFamily:custom">
+          <button type="button" class="upload-btn" id="fontUploadBtn">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <span>Choose .woff2 / .woff / .ttf</span>
+          </button>
+          <button type="button" class="upload-btn" id="fontUploadClear" disabled>Clear</button>
+          <input type="file" id="fontUploadFile" accept=".woff2,.woff,.ttf,.otf,font/woff2,font/woff,font/ttf,font/otf" hidden/>
+        </div>
+        <p class="panel-microhint" data-show="fontFamily:inter,geist,jetbrains">If the font isn't installed on your system, it falls back to system fonts. Use custom upload to bundle a specific font.</p>
+      </section>
+
+      <section class="control-group control-group-plain">
         <button class="btn-subtle danger" id="themeReset">Reset everything to defaults</button>
       </section>
     </div>

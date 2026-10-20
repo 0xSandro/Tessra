@@ -466,6 +466,22 @@ body.dark-mode .upload-btn:disabled { color: var(--muted); }
 }
 *::-webkit-scrollbar-corner { background: transparent; }
 
+/* Inside widgets, hide the scrollbar entirely. Overflow is untouched, so
+   wheel/trackpad/touch/keyboard scrolling all still work. !important beats
+   per-widget `scrollbar-width: thin` rules (e.g. .aw-hourly). The side panel
+   and popovers keep their minimal scrollbars. */
+.widget,
+.widget * {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none;
+}
+.widget::-webkit-scrollbar,
+.widget *::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 html, body {
   font-family: var(--font-family, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
   margin: 0;
@@ -480,7 +496,9 @@ body {
   background-color: var(--bg);
   background-image: radial-gradient(var(--dot) 1px, transparent 1px);
   background-size: var(--grid-size) var(--grid-size);
-  background-position: 0 0;
+  /* Anchor the dot grid to the screen center, matching the widget origin, so
+     snapped widget edges keep the same spacing relative to the dots. */
+  background-position: calc(50% + var(--grid-size) / 2) calc(50% + var(--grid-size) / 2);
   background-repeat: repeat;
 }
 body.bg-color   { background-image: none; }
@@ -491,10 +509,43 @@ body.bg-image   {
   background-repeat: no-repeat;
 }
 
+/* No accidental text selection while clicking or dragging around the page.
+   Form fields and the few widget areas whose text is worth copying opt back in. */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+input, textarea, select, [contenteditable]:not([contenteditable="false"]),
+.md-preview, .regex-output, .clipboard-text, .ontd-text, .wr-extract,
+.snippets-preview, .calc-display, .sysinfo-value {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Controls stay the same size at any page zoom: --ui-zoom is 1 / page zoom
+   (set in applyZoom), which cancels the zoom on <html> for these elements.
+   They're all direct children of <body>, so the inverse never compounds. */
+#edit-toggle, #quick-access, #quick-picker, #zoom-controls, #side-panel,
+#cmd-palette, #onboarding-modal, #onboarding-tour,
+#settings-popover, #color-popover, #zorder-popover {
+  zoom: var(--ui-zoom, 1);
+}
+
+/* Fixed + inset:0 (rather than 100vw/100vh) so the board always matches the
+   visible viewport, even with the page-wide CSS zoom applied. */
 #board {
-  position: relative;
-  width: 100vw;
-  height: 100vh;
+  position: fixed;
+  inset: 0;
+}
+/* Zero-size point at the screen center. Widgets are positioned relative to
+   it, which keeps layouts centered on any screen and makes zoom scale around
+   the middle. */
+#stage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
 }
 
 /* -------- Widgets -------- */
@@ -1325,12 +1376,17 @@ body.dark-mode .wf-preview { background: rgba(255,255,255,0.04); }
 }
 .search-input::placeholder { color: var(--muted); }
 
-/* Shortcuts */
+/* Shortcuts. Icon size is a variable (--sc-icon) so the size setting, the
+   list view and the settings rows all derive from one number. */
 .shortcuts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--sc-col, 72px), 1fr));
   gap: 10px;
 }
+.shortcuts-list { display: flex; flex-direction: column; gap: 2px; }
+.sc-size-s { --sc-icon: 24px; --sc-col: 60px; }
+.sc-size-m { --sc-icon: 32px; --sc-col: 72px; }
+.sc-size-l { --sc-icon: 44px; --sc-col: 88px; }
 .shortcut {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 6px; padding: 10px 6px; border-radius: 8px;
@@ -1338,13 +1394,122 @@ body.dark-mode .wf-preview { background: rgba(255,255,255,0.04); }
   position: relative; transition: background 0.1s;
 }
 .shortcut:hover { background: rgba(0,0,0,0.04); }
+body.edit-mode .shortcut { cursor: grab; }
 .shortcut-icon {
-  width: 32px; height: 32px; border-radius: 8px;
+  width: var(--sc-icon, 32px); height: var(--sc-icon, 32px);
+  border-radius: calc(var(--sc-icon, 32px) * 0.25);
   background: rgba(0,0,0,0.05);
   display: flex; align-items: center; justify-content: center;
   font-weight: 600; color: var(--muted);
-  background-size: cover; background-position: center;
+  font-size: calc(var(--sc-icon, 32px) * 0.42);
+  position: relative; overflow: hidden; flex-shrink: 0;
 }
+.sc-shape-circle .shortcut-icon { border-radius: 50%; }
+.sc-shape-plain  .shortcut-icon { background: transparent; }
+/* Favicon sits over a letter tile; the letter only shows if every favicon
+   source fails (see mountIcon in shortcuts.js). */
+.shortcut-favicon {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  opacity: 0;   /* revealed only once a real favicon loaded (.has-favicon) */
+}
+.shortcut-icon.has-favicon .shortcut-favicon { opacity: 1; }
+.shortcut-icon.has-favicon .shortcut-letter { visibility: hidden; }
+.shortcut-icon-emoji { font-size: calc(var(--sc-icon, 32px) * 0.62); font-weight: 400; line-height: 1; }
+.shortcut-icon-glyph { color: var(--fg); }
+.shortcut-icon-glyph svg { width: calc(var(--sc-icon, 32px) * 0.56); height: calc(var(--sc-icon, 32px) * 0.56); display: block; }
+/* Names hidden: icon-only tiles packed tighter */
+.sc-no-labels .shortcut-label { display: none; }
+.sc-no-labels .shortcut { padding: 8px 4px; }
+.sc-no-labels.shortcuts-grid { grid-template-columns: repeat(auto-fill, minmax(calc(var(--sc-icon, 32px) + 20px), 1fr)); gap: 6px; }
+/* List view: icon, name and domain on one row */
+.shortcuts-list .shortcut { flex-direction: row; justify-content: flex-start; gap: 10px; padding: 6px 28px 6px 8px; }
+.shortcut-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.shortcuts-list .shortcut-label { font-size: 13px; }
+.shortcut-host { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shortcuts-list .shortcut-del { top: 50%; right: 6px; transform: translateY(-50%); }
+/* Drag to reorder: the dragged tile dims, an accent bar marks the drop side */
+.shortcut.sc-dragging { opacity: 0.4; }
+.shortcuts-grid .shortcut.drop-before { box-shadow: inset 3px 0 0 var(--accent); }
+.shortcuts-grid .shortcut.drop-after  { box-shadow: inset -3px 0 0 var(--accent); }
+.shortcuts-list .shortcut.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.shortcuts-list .shortcut.drop-after  { box-shadow: inset 0 -2px 0 var(--accent); }
+
+/* Shortcuts settings: reorderable list, per-shortcut editor, add form */
+.sc-manage { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.sc-row { display: flex; align-items: center; gap: 6px; padding: 4px; border-radius: 8px; }
+.sc-row:hover, .sc-row-open { background: rgba(0,0,0,0.04); }
+.sc-row.sc-dragging { opacity: 0.4; }
+.sc-row.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.sc-row.drop-after  { box-shadow: inset 0 -2px 0 var(--accent); }
+.sc-grip {
+  width: 14px; height: 22px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted); cursor: grab; opacity: 0.5;
+}
+.sc-grip svg { width: 14px; height: 14px; display: block; }
+.sc-row:hover .sc-grip { opacity: 1; }
+.sc-row-icon { --sc-icon: 28px; border: none; padding: 0; font-family: inherit; }
+button.sc-row-icon { cursor: pointer; }
+button.sc-row-icon:hover { box-shadow: 0 0 0 2px var(--accent); }
+.sc-row-label {
+  flex: 1; min-width: 0; text-align: left;
+  background: none; border: none; padding: 4px 2px; cursor: pointer;
+  font-family: inherit; font-size: 12.5px; color: var(--fg);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sc-row-del {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  width: 22px; height: 22px; border-radius: 6px; font-size: 14px; padding: 0; flex-shrink: 0;
+}
+.sc-row-del:hover { color: var(--fg); background: rgba(0,0,0,0.06); }
+.sc-editor { padding: 8px 4px 10px; margin-bottom: 4px; border-bottom: 1px solid var(--panel-border); }
+.sc-field { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; color: var(--muted); }
+.sc-field > span { width: 36px; flex-shrink: 0; }
+.sc-field-label { font-size: 12px; color: var(--muted); margin: 8px 0 6px; }
+.sc-editor .seg-control { margin-bottom: 8px; }
+.sc-editor .panel-microhint { margin: 0 2px; }
+.sc-pane[hidden] { display: none !important; }
+.sc-input {
+  width: 100%; min-width: 0; box-sizing: border-box;
+  padding: 6px 8px; font-size: 12.5px; font-family: inherit;
+  border: 1px solid var(--panel-border); border-radius: 6px;
+  background: transparent; color: var(--fg); outline: none;
+}
+.sc-input:focus { border-color: var(--accent); }
+.sc-input.sc-invalid { border-color: #dc2626; }
+.sc-emoji-input { font-size: 14px; }
+.sc-glyphs { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.sc-glyph {
+  aspect-ratio: 1; padding: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.03); color: var(--fg);
+  border: 1px solid transparent; border-radius: 6px;
+}
+.sc-glyph svg { width: 16px; height: 16px; display: block; }
+.sc-glyph:hover { background: rgba(0,0,0,0.07); }
+.sc-glyph.active { border-color: var(--accent); }
+.sc-addform { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--panel-border); }
+.sc-add-row { display: flex; gap: 6px; }
+.sc-addform .btn-subtle { margin-top: 0; }
+.sc-add-btn { flex-shrink: 0; }
+.sc-suggest-btn { width: 100%; }
+.sc-suggest { margin-top: 8px; display: flex; flex-direction: column; gap: 2px; }
+.sc-suggest-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sc-suggest-title, .sc-suggest-host { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sc-suggest-title { font-size: 12.5px; color: var(--fg); }
+.sc-suggest-host  { font-size: 10.5px; color: var(--muted); }
+.sc-suggest-add {
+  width: 24px; height: 24px; flex-shrink: 0; padding: 0;
+  border: 1px solid var(--panel-border); border-radius: 6px;
+  background: none; color: var(--fg); cursor: pointer; font-size: 15px; line-height: 1;
+}
+.sc-suggest-add:hover { border-color: var(--accent); color: var(--accent); }
+body.dark-mode .sc-row:hover, body.dark-mode .sc-row-open { background: rgba(255,255,255,0.05); }
+body.dark-mode .sc-row-del:hover, body.dark-mode .sc-glyph:hover { background: rgba(255,255,255,0.1); }
+body.dark-mode .sc-glyph { background: rgba(255,255,255,0.05); }
+body.dark-mode .sc-shape-plain .shortcut-icon { background: transparent; }
 .shortcut-label { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .shortcut-del {
   position: absolute; top: 0; right: 2px;
@@ -1352,9 +1517,12 @@ body.dark-mode .wf-preview { background: rgba(255,255,255,0.04); }
   display: none;
 }
 body.edit-mode .shortcut-del { display: block; }
-.shortcut-add {
-  background: none; border: 1px dashed var(--widget-border); color: var(--muted);
-  cursor: pointer; font-size: 22px; border-radius: 8px; padding: 6px; min-height: 60px;
+.shortcuts-empty {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  padding: 24px 12px;
+  font-style: italic;
 }
 
 /* Notes (tabbed) */
@@ -3341,22 +3509,11 @@ body.dark-mode .stocks-market[data-state="POSTPOST"] { color: #a5b4fc; }
 .crypto-footer {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
   flex-shrink: 0;
   padding-top: 4px;
 }
-.crypto-add {
-  flex: 1;
-  background: none;
-  border: 1px dashed var(--widget-border);
-  color: var(--muted);
-  cursor: pointer;
-  padding: 5px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-family: inherit;
-}
-.crypto-add:hover { color: var(--fg); background: rgba(0,0,0,0.03); }
 .crypto-updated {
   font-size: 10px;
   color: var(--muted);
@@ -5063,8 +5220,6 @@ body.dark-mode .wheel-rim { stroke: rgba(255,255,255,0.18); }
 #snap-guides {
   position: fixed;
   inset: 0;
-  width: 100vw;
-  height: 100vh;
   pointer-events: none;
   z-index: 9100;
   overflow: visible;
@@ -5763,6 +5918,68 @@ body.edit-mode #edit-toggle {
   right: 336px; /* sits just outside the open side panel */
 }
 body.edit-mode #edit-toggle svg { stroke: #fff; }
+
+/* Zoom control — bottom-right pill: − / current % / +. Kept low-key until
+   hovered so it doesn't compete with the widgets. */
+#zoom-controls {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06);
+  z-index: 10000;
+  opacity: 0.55;
+  transition: opacity 0.15s, right 0.25s ease;
+}
+#zoom-controls:hover,
+#zoom-controls:focus-within { opacity: 1; }
+
+/* Auto-hide (Theme → Appearance). Outside edit mode the corner controls fade
+   out until the pointer is near them (setupAutoHide adds .ui-revealed).
+   Keyboard focus still reveals them. */
+body.autohide-controls:not(.edit-mode) #edit-toggle:not(.ui-revealed):not(:focus-visible),
+body.autohide-controls:not(.edit-mode) #quick-access:not(.ui-revealed):not(:has(:focus-visible)),
+body.autohide-controls:not(.edit-mode) #zoom-controls:not(.ui-revealed):not(:has(:focus-visible)) {
+  opacity: 0;
+}
+body.autohide-controls #edit-toggle {
+  transition: opacity 0.2s, transform 0.1s, box-shadow 0.15s, right 0.25s ease;
+}
+body.edit-mode #zoom-controls { right: 336px; } /* clear of the open side panel */
+body.panel-left.edit-mode #zoom-controls { right: 16px; }
+.zoom-btn,
+.zoom-level {
+  background: none;
+  border: none;
+  color: var(--fg);
+  cursor: pointer;
+  font-family: inherit;
+  border-radius: 999px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.zoom-btn { width: 28px; padding: 0; }
+.zoom-btn svg { display: block; }
+.zoom-level {
+  min-width: 44px;
+  padding: 0 4px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.zoom-btn:hover,
+.zoom-level:hover { background: rgba(0,0,0,0.06); color: var(--fg); }
+body.dark-mode #zoom-controls { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); }
+body.dark-mode .zoom-btn:hover,
+body.dark-mode .zoom-level:hover { background: rgba(255,255,255,0.1); }
 /* In dark mode --fg is near-white (the "inverted pill" background is still
    correct), but the light `color`/`stroke` above then sits white-on-white.
    Also needs to win over the surface-glass/liquid dark-mode background
@@ -5838,14 +6055,18 @@ body.dark-mode .qa-btn.qa-add { background: transparent; }
 
 /* Glass / liquid: translucent backdrop-blur to match the Edit button language */
 body.surface-glass .qa-btn,
-body.surface-liquid .qa-btn {
+body.surface-liquid .qa-btn,
+body.surface-glass #zoom-controls,
+body.surface-liquid #zoom-controls {
   background: rgba(255, 255, 255, calc(var(--glass-alpha) + 0.2));
   backdrop-filter: blur(calc(var(--glass-blur) + 6px)) saturate(180%);
   -webkit-backdrop-filter: blur(calc(var(--glass-blur) + 6px)) saturate(180%);
   border-color: rgba(255, 255, 255, 0.5);
 }
 body.surface-glass.dark-mode .qa-btn,
-body.surface-liquid.dark-mode .qa-btn {
+body.surface-liquid.dark-mode .qa-btn,
+body.surface-glass.dark-mode #zoom-controls,
+body.surface-liquid.dark-mode #zoom-controls {
   background: rgba(30, 30, 35, calc(var(--glass-alpha) + 0.2));
   border-color: rgba(255, 255, 255, 0.12);
 }
@@ -5928,7 +6149,7 @@ body.dark-mode .qp-card:hover { background: rgba(255,255,255,0.08); }
   position: fixed;
   top: 0;
   right: 0;
-  height: 100vh;
+  bottom: 0;   /* not height:100vh — vh ignores the page zoom */
   width: 320px;
   background: var(--panel-bg);
   border-left: 1px solid var(--panel-border);
@@ -6455,6 +6676,68 @@ body.dark-mode .preset-soon { background: rgba(255,255,255,0.08); }
   color: var(--muted);
   margin: 0 0 10px;
 }
+
+/* Theme tab: every section is its own card with a clear title, and longer
+   cards are split into labelled sub-groups (.cg-sub), so the long list of
+   controls reads as distinct blocks instead of one continuous column. */
+.panel-pane[data-pane="theme"] { padding: 12px 12px 16px; }
+.panel-pane[data-pane="theme"] .control-group {
+  background: rgba(0,0,0,0.025);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 12px 12px 2px;
+  margin-bottom: 16px;
+}
+/* Header as its own tinted strip with a divider underneath; the negative
+   margins stretch it to the card's edges. */
+.panel-pane[data-pane="theme"] .control-group h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--fg);
+  margin: -12px -12px 14px;
+  padding: 11px 12px;
+  background: rgba(0,0,0,0.03);
+  border-bottom: 1px solid var(--panel-border);
+  border-radius: 11px 11px 0 0;
+}
+body.dark-mode .panel-pane[data-pane="theme"] .control-group h3 { background: rgba(255,255,255,0.04); }
+.panel-pane[data-pane="theme"] .control-group h3 svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  opacity: 0.7;   /* not --accent: the default accent is near-black, invisible in dark mode */
+}
+.panel-pane[data-pane="theme"] .control-group-plain {
+  background: none;
+  border: none;
+  padding: 2px 0 0;
+}
+.panel-pane[data-pane="theme"] .control-group-plain .btn-subtle { width: 100%; padding: 8px 12px; }
+.panel-pane[data-pane="theme"] .panel-microhint { margin-bottom: 10px; }
+.panel-pane[data-pane="theme"] .seg-control + .panel-microhint { margin-top: -6px; }
+.panel-pane[data-pane="theme"] .image-preview { margin-bottom: 10px; }
+/* Fixed label column: labels stay on one line and every slider in a card
+   starts at the same x. */
+.panel-pane[data-pane="theme"] .slider-row { grid-template-columns: 92px 1fr auto auto auto; }
+.panel-pane[data-pane="theme"] .slider-row > span:first-child { white-space: nowrap; }
+/* Sub-group label with a full-width divider above it (the negative side
+   margins stretch the line to the card's edges). */
+.cg-sub {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 4px -12px 10px;
+  padding: 12px 12px 0;
+  border-top: 1px solid var(--panel-border);
+}
+body.dark-mode .panel-pane[data-pane="theme"] .control-group { background: rgba(255,255,255,0.03); }
+body.dark-mode .panel-pane[data-pane="theme"] .control-group-plain { background: none; }
 
 .row {
   display: flex;

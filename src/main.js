@@ -55,7 +55,8 @@ const defaultTheme = () => ({
   fontFamily: 'system',   // 'system' | 'inter' | 'geist' | 'jetbrains' | 'serif' | 'mono' | 'custom'
   customFontDataUrl: null,// data: URL for an uploaded font file
   customFontName: null,   // user-visible name of the uploaded font
-  zoom: 100                // interface scale %, applied like browser zoom — helps small/high-PPI screens
+  zoom: 100,               // interface scale %, applied like browser zoom — helps small/high-PPI screens
+  autoHideControls: false  // hide Edit/quick-access/zoom buttons until the pointer is near them
 });
 
 function id() { return Math.random().toString(36).slice(2, 9); }
@@ -71,7 +72,51 @@ function snap(v) { return Math.round(v / GRID) * GRID; }
 // physical measurement into a logical one (or vice versa) must go through
 // this factor, or the board will drift out from under the cursor at any
 // zoom level other than 100%.
-function zoomFactor() { return ((state && state.theme && state.theme.zoom) || 100) / 100; }
+//
+// Zoom is remembered per screen (keyed by resolution), so a laptop and an
+// external monitor each keep their own level. theme.zoom is only the fallback
+// for a screen that has no saved level yet.
+const ZOOM_MIN = 50, ZOOM_MAX = 200, ZOOM_STEP = 10;
+function screenKey() { return `${screen.width}x${screen.height}`; }
+function zoomPct() {
+  const saved = state && state.screenZoom && state.screenZoom[screenKey()];
+  return saved || (state && state.theme && state.theme.zoom) || 100;
+}
+function zoomFactor() { return zoomPct() / 100; }
+function setZoomPct(pct) {
+  pct = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(pct)));
+  if (!state.screenZoom || typeof state.screenZoom !== 'object') state.screenZoom = {};
+  state.screenZoom[screenKey()] = pct;
+  applyZoom();
+  if (typeof window._refreshThemePanel === 'function') window._refreshThemePanel();
+  scheduleSave();
+}
+function applyZoom() {
+  document.documentElement.style.zoom = zoomFactor();
+  // Controls (Edit button, side panel, popovers, ...) apply this inverse zoom
+  // in CSS so they stay the same size at any page zoom. Their positioning
+  // code therefore works in plain viewport pixels — no zoom division.
+  document.documentElement.style.setProperty('--ui-zoom', 1 / zoomFactor());
+  const z = document.getElementById('zoom-level');
+  if (z) z.textContent = zoomPct() + '%';
+}
+
+// Widget x/y are offsets from the viewport center, not the top-left corner:
+// every widget lives inside #stage, a zero-size element pinned to the center
+// by CSS. That's what keeps a layout centered on any screen size, and makes
+// zoom grow/shrink around the middle instead of drifting to the bottom-right.
+// These helpers convert between that "board space" and viewport coordinates.
+function stageRect() { return document.getElementById('stage').getBoundingClientRect(); }
+// Visible viewport edges, in board space (logical px).
+function viewBounds() {
+  const r = stageRect(), z = zoomFactor();
+  const halfW = r.left / z, halfH = r.top / z;
+  return { left: -halfW, top: -halfH, right: halfW, bottom: halfH, halfW, halfH };
+}
+function clientToBoard(clientX, clientY) {
+  const r = stageRect(), z = zoomFactor();
+  return { x: (clientX - r.left) / z, y: (clientY - r.top) / z };
+}
 
 function makeWidget(type, opts = {}) {
   const def = registry.get(type);
@@ -112,15 +157,15 @@ function nextAutoTitle(type) {
 
 function defaultState() {
   const widgets = [
-    makeWidget('moon',     { x: 300, y: 400, w: 220, h: 280, z: 5 }),
-    makeWidget('clock',    { x: 520, y: 160, w: 360, h: 160, z: 7, settings: { watchface: 'flip', format: '24h', showSeconds: true } }),
-    makeWidget('weather',  { x: 200, y: 120, w: 300, h: 260, z: 8, settings: { location: 'Vienna', units: 'celsius', showForecast: true } }),
-    makeWidget('clipboard',{ x: 900, y: 120, w: 240, h: 200, z: 9 }),
-    makeWidget('ontd',     { x: 1160, y: 120, w: 320, h: 600, z: 13, settings: { type: 'events', count: 5 } }),
-    makeWidget('dayyear',  { x: 540, y: 340, w: 300, h: 180, z: 15, settings: { showRemaining: false, showWeek: true } }),
-    makeWidget('todo',     { x: 540, y: 540, w: 300, h: 220, z: 25 }),
-    makeWidget('sunset',   { x: 860, y: 340, w: 260, h: 180, z: 26, settings: { location: 'Vienna' } }),
-    makeWidget('timer',    { x: 880, y: 540, w: 260, h: 180, z: 35, settings: { minutes: 5, seconds: 0 } })
+    makeWidget('moon',     { x: -540, y: -40,  w: 220, h: 280, z: 5 }),
+    makeWidget('clock',    { x: -320, y: -280, w: 360, h: 160, z: 7, settings: { watchface: 'flip', format: '24h', showSeconds: true } }),
+    makeWidget('weather',  { x: -640, y: -320, w: 300, h: 260, z: 8, settings: { location: 'Vienna', units: 'celsius', showForecast: true } }),
+    makeWidget('clipboard',{ x: 60,   y: -320, w: 240, h: 200, z: 9 }),
+    makeWidget('ontd',     { x: 320,  y: -320, w: 320, h: 600, z: 13, settings: { type: 'events', count: 5 } }),
+    makeWidget('dayyear',  { x: -300, y: -100, w: 300, h: 180, z: 15, settings: { showRemaining: false, showWeek: true } }),
+    makeWidget('todo',     { x: -300, y: 100,  w: 300, h: 220, z: 25 }),
+    makeWidget('sunset',   { x: 20,   y: -100, w: 260, h: 180, z: 26, settings: { location: 'Vienna' } }),
+    makeWidget('timer',    { x: 40,   y: 100,  w: 260, h: 180, z: 35, settings: { minutes: 5, seconds: 0 } })
   ];
   const theme = Object.assign(defaultTheme(), {
     widgetBg: '#fafafa',
@@ -131,42 +176,106 @@ function defaultState() {
     darkWidgetBg: '#171717',
     darkWidgetBorder: '#404040'
   });
-  return { maxZ: 35, widgets, theme, favorites: [], quickSpawn: ['stickies'], onboardingComplete: false, integrations: { notion: { token: '' } } };
+  return { maxZ: 35, origin: 'center', screenZoom: {}, widgets, theme, favorites: [], quickSpawn: ['stickies'], onboardingComplete: false, integrations: { notion: { token: '' } } };
 }
 
-// A layout's x/y/w/h are absolute pixels captured on whatever screen it was
-// designed on — the shipped default, or a layout someone else exported and
-// sent over. On a smaller/older display those coordinates can run off the
-// right or bottom edge. This scales the whole layout down (uniformly, never
-// up) to fit the current viewport the first time it's shown, so a big-screen
-// layout still looks intentional on a small one instead of requiring the
-// user to scroll on first launch. Only called right after a layout is
-// freshly loaded (fresh install, import, paste) — never on a normal reload —
-// so it can't fight a user's own later resizes that intentionally exceed the
-// viewport.
-function fitLayoutToViewport(s) {
-  if (!s.widgets.length) return;
-  const vw = window.innerWidth  / zoomFactor();
-  const vh = window.innerHeight / zoomFactor();
-  // A not-yet-laid-out window can briefly report 0 (or another bogus tiny
-  // value) for its own dimensions. Trusting that would compute a negative
-  // scale and fling every widget toward negative/garbage coordinates instead
-  // of leaving them alone — bail out unless the viewport looks real.
-  if (!(vw >= 200) || !(vh >= 200)) return;
-  const maxX = Math.max(...s.widgets.map(w => w.x + w.w));
-  const maxY = Math.max(...s.widgets.map(w => w.y + w.h));
+// Zoom this screen out (never in) so the whole layout is visible. Runs when a
+// layout is freshly loaded (install, import, paste) and the first time a given
+// screen is seen; after that the user's own +/- choice is left alone.
+function fitZoomToLayout() {
+  if (!state.widgets.length) return;
+  // A not-yet-laid-out window can briefly report 0 for its own size. Bail
+  // rather than compute a nonsense zoom from it.
+  if (!(window.innerWidth >= 200) || !(window.innerHeight >= 200)) return;
+  const halfW = Math.max(...state.widgets.map(w => Math.max(Math.abs(w.x), Math.abs(w.x + w.w))));
+  const halfH = Math.max(...state.widgets.map(w => Math.max(Math.abs(w.y), Math.abs(w.y + w.h))));
   const MARGIN = 24;
-  const scale = Math.min(1, (vw - MARGIN) / maxX, (vh - MARGIN) / maxY);
-  if (!(scale > 0 && scale < 1)) return;   // already fits, or not a usable scale factor
-  s.widgets.forEach(w => {
-    const def = registry.get(w.type);
-    const minW = def?.minSize?.w || 0;
-    const minH = def?.minSize?.h || 0;
-    w.x = snap(w.x * scale);
-    w.y = snap(w.y * scale);
-    w.w = snap(Math.max(minW, w.w * scale));
-    w.h = snap(Math.max(minH, w.h * scale));
+  const fit = Math.min((window.innerWidth / 2 - MARGIN) / halfW, (window.innerHeight / 2 - MARGIN) / halfH);
+  if (!(fit > 0)) return;
+  const fitPct = Math.floor(fit * 100 / 5) * 5;   // round down to a 5% step
+  if (fitPct < zoomPct()) setZoomPct(fitPct);
+}
+
+// The first time a screen is seen (or on a fresh install), zoom out if the
+// layout doesn't fit, then remember the result for that screen so later
+// loads keep whatever the user picks with +/-.
+function settleScreenZoom(forceFit) {
+  if (!state.screenZoom || typeof state.screenZoom !== 'object') state.screenZoom = {};
+  const key = screenKey();
+  if (forceFit || !(key in state.screenZoom)) fitZoomToLayout();
+  if (!(key in state.screenZoom) && window.innerWidth >= 200) {
+    state.screenZoom[key] = zoomPct();
+    scheduleSave();
+  }
+}
+// Bottom-right − / % / + control. Steps land on round 10% marks (so 95% → 90
+// or 100), and the middle label resets to 100%.
+function setupZoomControls() {
+  const out = document.getElementById('zoom-out');
+  const inn = document.getElementById('zoom-in');
+  const lvl = document.getElementById('zoom-level');
+  if (!out || !inn || !lvl) return;
+  out.addEventListener('click', () => setZoomPct(Math.ceil(zoomPct() / ZOOM_STEP) * ZOOM_STEP - ZOOM_STEP));
+  inn.addEventListener('click', () => setZoomPct(Math.floor(zoomPct() / ZOOM_STEP) * ZOOM_STEP + ZOOM_STEP));
+  lvl.addEventListener('click', () => setZoomPct(100));
+  applyZoom();
+}
+// Auto-hide (Theme → Appearance): the corner controls stay invisible until the
+// pointer comes within REVEAL_PX of them. A distance check rather than
+// invisible hover zones, so nothing blocks clicks on widgets in the corners.
+function setupAutoHide() {
+  const REVEAL_PX = 80;
+  const $id = id => document.getElementById(id);
+  // [elements that get revealed, elements whose area counts as "near"]
+  const groups = [
+    { show: [$id('edit-toggle'), $id('quick-access')], area: [$id('edit-toggle'), $id('quick-access'), $id('quick-picker')] },
+    { show: [$id('zoom-controls')], area: [$id('zoom-controls')] }
+  ];
+  let x = -9999, y = -9999, pending = false;
+  const isNear = els => els.some(el => {
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    if (!r.width && !r.height) return false;   // display:none (e.g. closed picker)
+    return x >= r.left - REVEAL_PX && x <= r.right + REVEAL_PX
+        && y >= r.top  - REVEAL_PX && y <= r.bottom + REVEAL_PX;
   });
+  const update = () => {
+    pending = false;
+    groups.forEach(g => {
+      const on = isNear(g.area);
+      g.show.forEach(el => el && el.classList.toggle('ui-revealed', on));
+    });
+  };
+  document.addEventListener('mousemove', e => {
+    if (!document.body.classList.contains('autohide-controls')) return;
+    x = e.clientX; y = e.clientY;
+    if (!pending) { pending = true; requestAnimationFrame(update); }
+  }, { passive: true });
+  document.documentElement.addEventListener('mouseleave', () => { x = y = -9999; update(); });
+}
+// Dragging the window onto a different monitor changes the screen key.
+let lastScreenKey = null;
+window.addEventListener('resize', () => {
+  if (!state || screenKey() === lastScreenKey) return;
+  lastScreenKey = screenKey();
+  settleScreenZoom(false);
+  applyZoom();
+  if (typeof window._refreshThemePanel === 'function') window._refreshThemePanel();
+});
+
+// Pre-center layouts (anything saved or exported before widget positions
+// became center-relative) stored x/y from the top-left corner. Re-center
+// their bounding box on the origin once, keeping the arrangement intact.
+function centerLegacyLayout(s) {
+  if (s.origin === 'center') return;
+  s.origin = 'center';
+  if (!s.widgets.length) return;
+  const minX = Math.min(...s.widgets.map(w => w.x || 0));
+  const minY = Math.min(...s.widgets.map(w => w.y || 0));
+  const maxX = Math.max(...s.widgets.map(w => (w.x || 0) + (w.w || 0)));
+  const maxY = Math.max(...s.widgets.map(w => (w.y || 0) + (w.h || 0)));
+  const cx = snap((minX + maxX) / 2), cy = snap((minY + maxY) / 2);
+  s.widgets.forEach(w => { w.x = (w.x || 0) - cx; w.y = (w.y || 0) - cy; });
 }
 
 // Schema for the Integrations side-panel pane. Each provider has a name + one
@@ -190,7 +299,7 @@ function migrate(s) {
   // A hand-edited or corrupted storage blob (or one missing `widgets`
   // entirely) would otherwise reach init()'s `state.widgets.forEach(...)`
   // and crash the whole new-tab page with nothing to recover from.
-  if (!Array.isArray(s.widgets)) { s.widgets = []; return s; }
+  if (!Array.isArray(s.widgets)) { s.widgets = []; s.origin = 'center'; s.screenZoom = {}; return s; }
   const out = [];
   for (const w of s.widgets) {
     // Legacy v0.x: combined notes widget that held both notes text and todos.
@@ -312,6 +421,8 @@ function migrate(s) {
   const sortedByZ = s.widgets.slice().sort((a, b) => (a.z || 0) - (b.z || 0));
   sortedByZ.forEach((w, i) => { w.z = i + 1; });
   s.maxZ = sortedByZ.length;
+  centerLegacyLayout(s);
+  if (!s.screenZoom || typeof s.screenZoom !== 'object' || Array.isArray(s.screenZoom)) s.screenZoom = {};
   return s;
 }
 
@@ -380,7 +491,9 @@ function autoArrange() {
   // Leave room on the right for the (open) side panel; otherwise use the
   // full viewport. The button lives in the panel so it's likely open.
   const panelOpen = document.body.classList.contains('edit-mode');
-  const usableW = (window.innerWidth / zoomFactor() - (panelOpen ? 340 : 0)) - PAD;
+  const view = viewBounds();
+  // The panel doesn't scale with page zoom, so its 340px is in viewport px.
+  const usableW = (view.halfW * 2 - (panelOpen ? 340 / zoomFactor() : 0)) - PAD * 2;
 
   const ordered = state.widgets.slice().sort((a, b) => {
     // Treat positions within 30 px of each other as "same row"
@@ -388,19 +501,26 @@ function autoArrange() {
     return (a.x || 0) - (b.x || 0);
   });
 
-  let cx = PAD, cy = TOP, rowH = 0;
+  // Pack rows starting at (0,0), then shift the whole block so it's centered
+  // on the screen (or pinned under the top margin if it's taller than that).
+  let cx = 0, cy = 0, rowH = 0, blockW = 0;
   ordered.forEach(w => {
-    if (cx + w.w > usableW && cx > PAD) {
+    if (cx + w.w > usableW && cx > 0) {
       // wrap to next row
-      cx = PAD;
+      cx = 0;
       cy += rowH + GUTTER;
       rowH = 0;
     }
     w.x = cx;
     w.y = cy;
     cx += w.w + GUTTER;
+    blockW = Math.max(blockW, cx - GUTTER);
     if (w.h > rowH) rowH = w.h;
   });
+  const blockH = cy + rowH;
+  const offX = snap(-blockW / 2);
+  const offY = snap(Math.max(view.top + TOP, -blockH / 2));
+  ordered.forEach(w => { w.x += offX; w.y += offY; });
 
   // Reflect the new positions in the DOM
   state.widgets.forEach(w => {
@@ -471,14 +591,17 @@ function renderSnapGuides(g) {
   if (g.y != null) {
     html += `<line x1="${g.y.x0}" y1="${g.y.at}" x2="${g.y.x1}" y2="${g.y.at}" class="snap-line"/>`;
   }
-  el.innerHTML = html;
+  // Guide coordinates are in board space (origin = screen center); the SVG
+  // covers the viewport from its top-left, so shift by the stage offset.
+  const v = viewBounds();
+  el.innerHTML = html ? `<g transform="translate(${v.halfW} ${v.halfH})">${html}</g>` : '';
 }
 
-// Given a tentative dragged rect (page coords), the list of "other" widget
-// rects, and viewport dims — compute the best X and Y snap candidates within
-// SNAP_PX. Returns deltas to add to the dragged rect's left/top, plus the
-// guide-line endpoints to draw.
-function computeSnap(d, others, vw, vh) {
+// Given a tentative dragged rect (board coords), the list of "other" widget
+// rects, and the visible bounds from viewBounds() — compute the best X and Y
+// snap candidates within SNAP_PX. Returns deltas to add to the dragged rect's
+// left/top, plus the guide-line endpoints to draw.
+function computeSnap(d, others, view) {
   // d: { left, top, right, bottom, w, h, cx, cy }
   // Candidates: each is { axis, delta, at, span0, span1 }
   let bestX = null, bestY = null;
@@ -520,9 +643,9 @@ function computeSnap(d, others, vw, vh) {
     });
   }
 
-  // Viewport midlines — draw a full-screen guide
-  considerX(vw / 2, d.cx, 0, vh);
-  considerY(vh / 2, d.cy, 0, vw);
+  // Viewport midlines (the board origin) — draw a full-screen guide
+  considerX(0, d.cx, view.top, view.bottom);
+  considerY(0, d.cy, view.left, view.right);
 
   return { bestX, bestY };
 }
@@ -541,6 +664,10 @@ function rectFor(w) {
 function serialize() {
   return {
     maxZ: state.maxZ || 0,
+    // In-memory positions are always center-relative once loaded (migrate
+    // converts anything older), so always tag saved/exported snapshots.
+    origin: 'center',
+    screenZoom: state.screenZoom && typeof state.screenZoom === 'object' ? { ...state.screenZoom } : {},
     widgets: state.widgets.map(w => ({
       id: w.id, type: w.type,
       x: w.x, y: w.y, w: w.w, h: w.h,
@@ -578,7 +705,7 @@ window.addEventListener('beforeunload', () => { saveNow(); });
 window.addEventListener('pagehide', () => { saveNow(); });
 
 // ----- DOM refs -----
-const board     = document.getElementById('board');
+const stage     = document.getElementById('stage');
 const tpl       = document.getElementById('tpl-widget');
 const panel     = document.getElementById('side-panel');
 const editBtn   = document.getElementById('edit-toggle');
@@ -720,7 +847,7 @@ function renderWidget(w) {
   // leak warning on enableDrag's definition.
   node._dragCleanup = enableDrag(node, w);
   node._resizeCleanup = enableResize(node, w);
-  board.appendChild(node);
+  stage.appendChild(node);
   return node;
 }
 
@@ -806,6 +933,7 @@ function enableDrag(node, w) {
     // tossed onto the desktop intentionally and the tilt makes edge-snaps
     // look wrong anyway. Other widgets snap to neighbors + viewport midlines.
     const isSticky = w.type === 'stickies';
+    const view = viewBounds();
     let bestX = null, bestY = null;
     if (!isSticky) {
       const d = {
@@ -814,11 +942,12 @@ function enableDrag(node, w) {
         w: w.w, h: w.h,
         cx: nx + w.w / 2, cy: ny + w.h / 2
       };
-      ({ bestX, bestY } = computeSnap(d, others, window.innerWidth / z, window.innerHeight / z));
+      ({ bestX, bestY } = computeSnap(d, others, view));
     }
 
-    const fx = Math.max(0, nx + (bestX ? bestX.delta : 0));
-    const fy = Math.max(0, ny + (bestY ? bestY.delta : 0));
+    // Don't let a widget's top-left be dragged past the visible edge.
+    const fx = Math.max(view.left, nx + (bestX ? bestX.delta : 0));
+    const fy = Math.max(view.top,  ny + (bestY ? bestY.delta : 0));
     w.x = fx; w.y = fy;
     node.style.left = fx + 'px';
     node.style.top  = fy + 'px';
@@ -826,8 +955,8 @@ function enableDrag(node, w) {
     // Group members ride along
     if (groupOffsets) {
       groupOffsets.forEach(g => {
-        g.widget.x = Math.max(0, fx + g.dx);
-        g.widget.y = Math.max(0, fy + g.dy);
+        g.widget.x = Math.max(view.left, fx + g.dx);
+        g.widget.y = Math.max(view.top,  fy + g.dy);
         g.node.style.left = g.widget.x + 'px';
         g.node.style.top  = g.widget.y + 'px';
       });
@@ -1129,8 +1258,8 @@ function spawnFromClipboardPayload(payload, baseXY) {
   payload.widgets.forEach((src, i) => {
     const def = registry.get(src.type);
     if (!def) return;
-    const x = (baseXY?.x ?? 80) + i * STAGGER;
-    const y = (baseXY?.y ?? 100) + i * STAGGER;
+    const x = (baseXY?.x ?? 0) + i * STAGGER;
+    const y = (baseXY?.y ?? 0) + i * STAGGER;
     state.maxZ = (state.maxZ || 0) + 1;
     // src comes from the clipboard or a pasted/imported share string — treat
     // it like any other untrusted input and clamp to the widget's own
@@ -1140,8 +1269,8 @@ function spawnFromClipboardPayload(payload, baseXY) {
     const w = Number.isFinite(src.w) ? Math.max(min.w, Math.min(max.w, src.w)) : undefined;
     const h = Number.isFinite(src.h) ? Math.max(min.h, Math.min(max.h, src.h)) : undefined;
     const widget = makeWidget(src.type, {
-      x: snap(Math.max(0, x)),
-      y: snap(Math.max(0, y)),
+      x: snap(x),
+      y: snap(y),
       w, h,
       z: state.maxZ,
       data:     src.data     ? JSON.parse(JSON.stringify(src.data))     : undefined,
@@ -1195,9 +1324,12 @@ async function pasteFromClipboard() {
   try { parsed = JSON.parse(text); }
   catch { return false; }
   if (parsed?.format !== CLIP_FORMAT) return false;
-  // Stagger from the viewport's top-left margin so the pasted widget is
-  // clearly visible regardless of where the source was.
-  const newIds = spawnFromClipboardPayload(parsed, { x: 80, y: 100 });
+  // Paste centered on screen so it's clearly visible regardless of where the
+  // source was.
+  const first = Array.isArray(parsed.widgets) && parsed.widgets[0];
+  const fw = Number.isFinite(first?.w) ? first.w : 240;
+  const fh = Number.isFinite(first?.h) ? first.h : 160;
+  const newIds = spawnFromClipboardPayload(parsed, { x: -fw / 2, y: -fh / 2 });
   if (newIds.length) {
     setSelection(newIds);
     scheduleSave();
@@ -1246,11 +1378,12 @@ document.addEventListener('keydown', e => {
     const step = e.shiftKey ? 24 : 8;
     const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
     const dy = e.key === 'ArrowUp'   ? -step : e.key === 'ArrowDown'  ? step : 0;
+    const view = viewBounds();
     selectedIds.forEach(id => {
       const w = state.widgets.find(x => x.id === id);
       if (!w || w.locked) return;
-      w.x = Math.max(0, w.x + dx);
-      w.y = Math.max(0, w.y + dy);
+      w.x = Math.max(view.left, w.x + dx);
+      w.y = Math.max(view.top,  w.y + dy);
       const n = document.querySelector(`#board .widget[data-id="${id}"]`);
       if (n) { n.style.left = w.x + 'px'; n.style.top = w.y + 'px'; }
     });
@@ -1423,8 +1556,9 @@ function dropGhost(e) {
   const def = registry.get(type);
   if (!def) return;
   const size = def.defaultSize;
-  const x = Math.max(0, snap(e.clientX / zoomFactor() - size.w / 2));
-  const y = Math.max(0, snap(e.clientY / zoomFactor() - size.h / 2));
+  const p = clientToBoard(e.clientX, e.clientY);
+  const x = snap(p.x - size.w / 2);
+  const y = snap(p.y - size.h / 2);
   state.maxZ = (state.maxZ || 0) + 1;
   const w = makeWidget(type, { x, y, z: state.maxZ });
   if (def.autoNumber) w.title = nextAutoTitle(type);
@@ -1533,10 +1667,10 @@ const ColorPicker = (() => {
   });
 
   function position(anchor) {
-    const z = zoomFactor();
+    // Unzoomed control (see applyZoom) — viewport pixels throughout.
     const rect = anchor.getBoundingClientRect();
-    const rectLeft = rect.left / z, rectRight = rect.right / z, rectTop = rect.top / z;
-    const vh = window.innerHeight / z;
+    const rectLeft = rect.left, rectRight = rect.right, rectTop = rect.top;
+    const vh = window.innerHeight;
     const popW = 240, popH = 280;
     let left = rectLeft - popW - 10;
     if (left < 8) left = rectRight + 10;
@@ -1750,7 +1884,10 @@ function buildDate(field, settings, onChange) {
 // the watchface gallery where a `select` dropdown doesn't do justice to the
 // options. The field def provides a render(host, currentValue, set, settings)
 // function; we just give it a row to draw into.
-function buildPanel(field, settings, onChange) {
+// Custom-rendered field. render(host, value, set, settings, { widget, done }):
+// `widget` gives access to widget.data for panels that manage content (not
+// just settings); call done() after editing it to re-render the widget + save.
+function buildPanel(field, settings, onChange, widget) {
   const row = document.createElement('div');
   row.className = 'row row-panel';
   if (field.label) {
@@ -1767,12 +1904,36 @@ function buildPanel(field, settings, onChange) {
     onChange();
   };
   if (typeof field.render === 'function') {
-    field.render(host, settings[field.key], set, settings);
+    field.render(host, settings[field.key], set, settings, { widget, done: onChange });
   }
   return row;
 }
 
+// Action button — for settings that do something rather than store a value
+// (e.g. "Add shortcut"). field.onClick(widget, done) gets the live widget so
+// it can edit widget.data; call done() to re-render the widget and save.
+function buildButton(field, settings, onChange, widget) {
+  const row = document.createElement('div');
+  row.className = 'row row-panel';
+  if (field.label) {
+    const label = document.createElement('div');
+    label.className = 'row-panel-label';
+    label.textContent = field.label;
+    row.appendChild(label);
+  }
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn-subtle';
+  btn.textContent = field.buttonLabel || field.label || 'Run';
+  btn.addEventListener('click', () => {
+    if (typeof field.onClick === 'function') field.onClick(widget, onChange);
+  });
+  row.appendChild(btn);
+  return row;
+}
+
 const fieldBuilders = {
+  button: buildButton,
   toggle: buildToggle,
   select: buildSelect,
   slider: buildSlider,
@@ -1782,7 +1943,7 @@ const fieldBuilders = {
   panel:  buildPanel
 };
 
-function buildField(field, settings, onChange) {
+function buildField(field, settings, onChange, widget) {
   const fn = fieldBuilders[field.type];
   if (!fn) {
     console.warn(`[Tessra] unknown setting type: ${field.type}`);
@@ -1791,7 +1952,7 @@ function buildField(field, settings, onChange) {
     note.textContent = `Unknown field type: ${field.type}`;
     return note;
   }
-  return fn(field, settings, onChange);
+  return fn(field, settings, onChange, widget);
 }
 
 // ----- Settings popover (shared, anchored to a widget's gear icon) -----
@@ -1812,7 +1973,7 @@ const SettingsPopover = (() => {
     for (const field of currentDef.settingsSchema) {
       content.appendChild(buildField(field, currentWidget.settings, () => {
         if (currentOnChange) currentOnChange();
-      }));
+      }, currentWidget));
     }
   }
 
@@ -1826,14 +1987,13 @@ const SettingsPopover = (() => {
   });
 
   function position(anchor) {
-    const z = zoomFactor();
+    // Unzoomed control (see applyZoom) — viewport pixels throughout.
     const rect = anchor.getBoundingClientRect();
-    const rectLeft = rect.left / z, rectRight = rect.right / z;
-    const rectTop = rect.top / z, rectBottom = rect.bottom / z;
-    const vw = window.innerWidth / z, vh = window.innerHeight / z;
+    const rectLeft = rect.left, rectRight = rect.right;
+    const rectTop = rect.top, rectBottom = rect.bottom;
+    const vw = window.innerWidth, vh = window.innerHeight;
     const popW = 260;
-    const rawH = pop.offsetHeight;
-    const popH = rawH ? rawH / z : 240;
+    const popH = pop.offsetHeight || 240;
     let left = rectRight - popW;
     if (left < 8) left = rectLeft;
     if (left + popW > vw - 8) left = vw - popW - 8;
@@ -1928,6 +2088,7 @@ function applyTheme() {
   document.documentElement.style.setProperty('--widget-shadow-hover',
     `0 2px 4px rgba(0,0,0,${(0.06 * s * 2 * shA).toFixed(3)}), 0 ${Math.round(6 + 12 * s)}px ${Math.round(16 + 32 * s)}px rgba(0,0,0,${(0.08 * s * 2 * shA).toFixed(3)})`);
   document.body.classList.toggle('always-headers', !!t.showHeaders);
+  document.body.classList.toggle('autohide-controls', !!t.autoHideControls);
   // Traffic lights only apply when window-style headers are also on
   document.body.classList.toggle('traffic-lights', !!t.showHeaders && !!t.trafficLights);
   // Panel side
@@ -1962,9 +2123,8 @@ function applyTheme() {
     removeCustomFont();
   }
   // Whole-page zoom, applied the same way as the browser's own Ctrl +/- —
-  // scales layout, not just rendering, so every coordinate (drag, resize,
-  // snap-guides) stays correct with zero changes to that math.
-  document.documentElement.style.zoom = (t.zoom || 100) / 100;
+  // scales layout, not just rendering. Per-screen, see zoomPct().
+  applyZoom();
 }
 
 // Inject a single <style id="custom-font-face"> tag with the @font-face rule.
@@ -2197,7 +2357,6 @@ function bindTheme() {
   bindSlider('#widgetShadow',      '#widgetShadowN',      'widgetShadow',      100);
   bindSlider('#glassBlur',         '#glassBlurN',         'glassBlur',         60);
   bindSlider('#glassAlpha',        '#glassAlphaN',        'glassAlpha',        90);
-  bindSlider('#zoom',              '#zoomN',              'zoom',              150, 60);
 
   // Surface style segmented control
   const surfaceSeg = panel.querySelector('[data-control="surfaceStyle"]');
@@ -2225,6 +2384,16 @@ function bindTheme() {
     darkCb.checked = !!t.darkMode;
     darkCb.addEventListener('change', () => {
       t.darkMode = darkCb.checked;
+      applyTheme();
+      saveNow();
+    });
+  }
+
+  const autoHideCb = $('#autoHideControls');
+  if (autoHideCb) {
+    autoHideCb.checked = !!t.autoHideControls;
+    autoHideCb.addEventListener('change', () => {
+      t.autoHideControls = autoHideCb.checked;
       applyTheme();
       saveNow();
     });
@@ -2278,11 +2447,13 @@ function bindTheme() {
   // Reset everything
   $('#themeReset').addEventListener('click', () => {
     Object.assign(t, defaultTheme());
+    setZoomPct(100);
     Object.keys(colorControls).forEach(k => colorControls[k].refresh());
     Object.keys(sliders).forEach(k => sliders[k].refresh());
     $('#showHeaders').checked = !!t.showHeaders;
     if ($('#trafficLights')) $('#trafficLights').checked = !!t.trafficLights;
     if ($('#darkMode'))      $('#darkMode').checked      = !!t.darkMode;
+    if ($('#autoHideControls')) $('#autoHideControls').checked = !!t.autoHideControls;
     updateSurfaceActive();
     refreshImagePreview();
     applyTheme(); updateSeg(); saveNow();
@@ -2302,6 +2473,7 @@ function bindTheme() {
     const sh = panel.querySelector('#showHeaders'); if (sh) sh.checked = !!t.showHeaders;
     const tl = panel.querySelector('#trafficLights'); if (tl) tl.checked = !!t.trafficLights;
     const dm = panel.querySelector('#darkMode'); if (dm) dm.checked = !!t.darkMode;
+    const ah = panel.querySelector('#autoHideControls'); if (ah) ah.checked = !!t.autoHideControls;
     const ff = panel.querySelector('#fontFamily'); if (ff) ff.value = t.fontFamily || 'system';
     updateSurfaceActive();
     refreshImagePreview();
@@ -2338,10 +2510,9 @@ function spawnWidget(type) {
   const def = registry.get(type);
   if (!def) return;
   const sz = def.defaultSize;
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const x = Math.max(40, snap((vw - sz.w) / 2));
-  const y = Math.max(80, snap((vh - sz.h) / 2));
+  // Board origin is the screen center, so centering is just -size/2.
+  const x = snap(-sz.w / 2);
+  const y = snap(-sz.h / 2);
   state.maxZ = (state.maxZ || 0) + 1;
   const widget = makeWidget(type, { x, y, z: state.maxZ });
   if (def.autoNumber) widget.title = nextAutoTitle(type);
@@ -2417,10 +2588,9 @@ function toggleQuickPicker() {
   // Anchor by the add button's bottom-right corner.
   const addBtn = document.getElementById('qa-add-btn');
   if (addBtn) {
-    const z = zoomFactor();
-    const rect = addBtn.getBoundingClientRect();
-    picker.style.top   = (rect.bottom / z + 8) + 'px';
-    picker.style.right = ((window.innerWidth - rect.right) / z) + 'px';
+    const rect = addBtn.getBoundingClientRect();   // unzoomed control — viewport px
+    picker.style.top   = (rect.bottom + 8) + 'px';
+    picker.style.right = (window.innerWidth - rect.right) + 'px';
   }
   // Outside-click closer. Defer so the click that opened the picker doesn't
   // immediately close it.
@@ -2444,12 +2614,20 @@ function toggleQuickPicker() {
 const PRESET_FORMAT  = 'tessra-layout';
 const PRESET_VERSION = 1;
 
+// Per-screen zoom levels describe this device's monitors, not the layout —
+// keep them out of anything that gets shared.
+function exportableState() {
+  const s = serialize();
+  delete s.screenZoom;
+  return s;
+}
+
 function exportLayout() {
   const payload = {
     format:     PRESET_FORMAT,
     version:    PRESET_VERSION,
     exportedAt: new Date().toISOString(),
-    state:      serialize()
+    state:      exportableState()
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url  = URL.createObjectURL(blob);
@@ -2497,9 +2675,11 @@ async function importLayoutFromFile(file) {
   // Replace state, run through migrate() so any legacy fields are normalized
   // against the current widget registry. Save immediately so a refresh
   // before any further action preserves the import.
+  const keepZoom = state.screenZoom;
   state = migrate(stateLike);
   if (!state.theme) state.theme = defaultTheme();
-  fitLayoutToViewport(state);
+  state.screenZoom = keepZoom || {};
+  fitZoomToLayout();
 
   applyTheme();
   state.widgets.forEach(renderWidget);
@@ -2539,7 +2719,7 @@ function setupPresetIO() {
 
 async function encodeShareString() {
   const payload = JSON.stringify({
-    format: PRESET_FORMAT, version: PRESET_VERSION, state: serialize()
+    format: PRESET_FORMAT, version: PRESET_VERSION, state: exportableState()
   });
   if (typeof CompressionStream !== 'undefined') {
     try {
@@ -2613,9 +2793,11 @@ async function pasteShareString() {
   });
   clearSelection();
   clearSnapGuides();
+  const keepZoom = state.screenZoom;
   state = migrate(stateLike);
   if (!state.theme) state.theme = defaultTheme();
-  fitLayoutToViewport(state);
+  state.screenZoom = keepZoom || {};
+  fitZoomToLayout();
   applyTheme();
   state.widgets.forEach(renderWidget);
   populateCatalog();
@@ -2639,10 +2821,9 @@ function openZOrderPopover(anchor, w, node) {
   const pop = document.getElementById('zorder-popover');
   if (!pop) return;
   zOrderTarget = { w, node };
-  const z = zoomFactor();
-  const rect = anchor.getBoundingClientRect();
-  pop.style.top   = (rect.bottom / z + 4) + 'px';
-  pop.style.right = ((window.innerWidth - rect.right) / z) + 'px';
+  const rect = anchor.getBoundingClientRect();   // unzoomed control — viewport px
+  pop.style.top   = (rect.bottom + 4) + 'px';
+  pop.style.right = (window.innerWidth - rect.right) + 'px';
   pop.classList.remove('hidden');
   setTimeout(() => {
     const close = e => {
@@ -3233,7 +3414,7 @@ function setupPageMarquee() {
   rect.id = 'page-marquee';
   document.body.appendChild(rect);
   // Ignore clicks that start on anything that isn't bare page.
-  const SKIP_SELECTOR = '.widget, #side-panel, #edit-toggle, #quick-access, #quick-picker, #color-popover, #settings-popover, .drag-ghost, .author-footer, button, input, textarea, a, select';
+  const SKIP_SELECTOR = '.widget, #side-panel, #edit-toggle, #quick-access, #quick-picker, #zoom-controls, #color-popover, #settings-popover, .drag-ghost, .author-footer, button, input, textarea, a, select';
   let dragging = false;
   let originX = 0, originY = 0;
 
@@ -3280,12 +3461,9 @@ function setupPageMarquee() {
       clearSelection();
       return;
     }
-    const boardRect = document.getElementById('board').getBoundingClientRect();
-    const z1 = zoomFactor();
-    const mx0 = (Math.min(originX, e.clientX) - boardRect.left) / z1;
-    const my0 = (Math.min(originY, e.clientY) - boardRect.top) / z1;
-    const mx1 = (Math.max(originX, e.clientX) - boardRect.left) / z1;
-    const my1 = (Math.max(originY, e.clientY) - boardRect.top) / z1;
+    const p0 = clientToBoard(Math.min(originX, e.clientX), Math.min(originY, e.clientY));
+    const p1 = clientToBoard(Math.max(originX, e.clientX), Math.max(originY, e.clientY));
+    const mx0 = p0.x, my0 = p0.y, mx1 = p1.x, my1 = p1.y;
     const hits = state.widgets
       .filter(w => !(w.x + w.w < mx0 || w.x > mx1 || w.y + w.h < my0 || w.y > my1))
       .map(w => w.id);
@@ -3305,7 +3483,7 @@ function setupPageMarquee() {
   }
   state = loaded;
   if (!state.theme) state.theme = defaultTheme();
-  if (isFreshLoad) fitLayoutToViewport(state);
+  settleScreenZoom(isFreshLoad);
   applyTheme();
   populateCatalog();
   populateIntegrationsPane();
@@ -3313,6 +3491,8 @@ function setupPageMarquee() {
   bindTheme();
   setupPageMarquee();
   renderQuickAccess();
+  setupZoomControls();
+  setupAutoHide();
   setupPresetIO();
   setupZOrderPopover();
   setupFontUpload();
